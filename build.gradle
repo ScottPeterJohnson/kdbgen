@@ -13,7 +13,10 @@ plugins {
     id 'com.jfrog.bintray' version '1.7.3'
 }
 
+apply plugin: 'java'
 apply plugin: 'kotlin'
+apply plugin: 'maven'
+apply plugin: 'maven-publish'
 
 
 group 'net.justmachinery'
@@ -36,12 +39,23 @@ dependencies {
     compile "com.xenomachina:kotlin-argparser:2.0.0"
 }
 
+publishing {
+    publications {
+        Publication(MavenPublication) {
+            from components.java
+            groupId 'net.justmachinery.kdbgen'
+            artifactId 'kdbgen'
+            version "$project.version"
+        }
+    }
+}
+
 bintray {
     user = System.getenv('BINTRAY_USER')
     key = System.getenv('BINTRAY_KEY')
     pkg {
         repo = 'generic'
-        name = 'net.justmachinery.kdbgen'
+        name = 'KDBGen'
         licenses = ['Apache-2.0']
         vcsUrl = 'https://github.com/ScottPeterJohnson/kdbgen.git'
         version {
@@ -51,5 +65,5 @@ bintray {
             vcsTag = "$project.version"
         }
     }
-    configurations = ['kotlin']
+    publications = ['Publication']
 }
