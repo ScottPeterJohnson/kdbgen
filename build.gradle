@@ -1,0 +1,55 @@
+buildscript {
+    ext.kotlin_version = '1.1.2'
+
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+    }
+}
+
+plugins {
+    id 'com.jfrog.bintray' version '1.7.3'
+}
+
+apply plugin: 'kotlin'
+
+
+group 'net.justmachinery'
+description = "Utility to generate Kotlin classes to interface with a database"
+version = '0.1-SNAPSHOT'
+
+sourceCompatibility = 1.8
+
+
+repositories {
+    mavenCentral()
+    jcenter()
+}
+
+dependencies {
+    compile "org.jetbrains.kotlin:kotlin-stdlib-jre8:$kotlin_version"
+    compile 'org.reflections:reflections:0.9.10'
+    compile "org.postgresql:postgresql:9.4.1212"
+    compile "org.jetbrains.kotlin:kotlin-reflect:$kotlin_version"
+    compile "com.xenomachina:kotlin-argparser:2.0.0"
+}
+
+bintray {
+    user = System.getenv('BINTRAY_USER')
+    key = System.getenv('BINTRAY_KEY')
+    pkg {
+        repo = 'generic'
+        name = 'net.justmachinery.kdbgen'
+        licenses = ['Apache-2.0']
+        vcsUrl = 'https://github.com/ScottPeterJohnson/kdbgen.git'
+        version {
+            name = project.version
+            desc = "$project.name version $project.version"
+            released = new Date()
+            vcsTag = "$project.version"
+        }
+    }
+    configurations = ['kotlin']
+}
