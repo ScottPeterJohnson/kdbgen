@@ -21,7 +21,7 @@ apply plugin: 'maven-publish'
 
 group 'net.justmachinery'
 description = "Utility to generate Kotlin classes to interface with a database"
-version = '0.1-SNAPSHOT'
+version = '0.1.5'
 
 sourceCompatibility = 1.8
 
@@ -39,6 +39,11 @@ dependencies {
     compile "com.xenomachina:kotlin-argparser:2.0.0"
 }
 
+task sourcesJar(type:Jar, dependsOn: classes){
+    classifier = 'sources'
+    from sourceSets.main.allSource
+}
+
 publishing {
     publications {
         Publication(MavenPublication) {
@@ -46,16 +51,17 @@ publishing {
             groupId 'net.justmachinery.kdbgen'
             artifactId 'kdbgen'
             version "$project.version"
+            artifact sourcesJar
         }
     }
 }
 
 bintray {
-    user = System.getenv('BINTRAY_USER')
-    key = System.getenv('BINTRAY_KEY')
+    user = project.property("BINTRAY_USER")
+    key = project.property("BINTRAY_KEY")
     pkg {
         repo = 'generic'
-        name = 'KDBGen'
+        name = 'kdbgen'
         licenses = ['Apache-2.0']
         vcsUrl = 'https://github.com/ScottPeterJohnson/kdbgen.git'
         version {

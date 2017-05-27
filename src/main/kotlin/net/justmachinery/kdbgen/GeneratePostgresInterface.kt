@@ -1,4 +1,4 @@
-package net.justmachinery.dbgen
+package net.justmachinery.kdbgen
 
 import com.xenomachina.argparser.ArgParser
 import com.xenomachina.argparser.default
@@ -11,6 +11,7 @@ import java.sql.DriverManager
 import java.sql.Timestamp
 import java.util.*
 
+val kdbGen = "net.justmachinery.kdbgen"
 
 val defaultOutputDirectory = "build/generated-sources/kotlin"
 val defaultEnumPackage = "net.justmachinery.dbgen.enums"
@@ -125,10 +126,10 @@ class Renderer(val settings : Settings, val userEnumTypes : List<String>) {
 	}
 
 	fun renderImports(writer: OutputStreamWriter) {
-		writer.append("import io.jscry.support.InsertOperation\n")
-		writer.append("import io.jscry.support.SelectOperation\n")
-		writer.append("import io.jscry.support.DeleteOperation\n")
-		writer.append("import io.jscry.support.UpdateOperation\n")
+		writer.append("import $kdbGen.InsertOperation\n")
+		writer.append("import $kdbGen.SelectOperation\n")
+		writer.append("import $kdbGen.DeleteOperation\n")
+		writer.append("import $kdbGen.UpdateOperation\n")
 		writer.append("import javax.annotation.CheckReturnValue\n")
 		writer.append("import java.sql.ResultSet\n")
 	}
