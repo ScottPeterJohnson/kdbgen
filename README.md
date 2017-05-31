@@ -58,12 +58,12 @@ The following example code is for interfacing with the [kwery-core](https://gith
  
  fun <Op : SqlOp, On : OnTarget> Statement<Op, On, NotProvided>.execute(): Unit {
  	val (sql, parameters) = render(this)
- 	io.jscry.database.sql.select(sql, parameters.toMap(), mapper = {})
+ 	session.select(sql, parameters.toMap(), mapper = {})
  }
  
  inline fun <Op : SqlOp, On : OnTarget, reified Result : SqlResult> Statement<Op, On, Result>.query(): List<Result> {
  	val (sql, parameters) = render(this)
- 	return io.jscry.database.sql.select(sql, parameters.toMap(), mapper = dataClassMapper(Result::class))
+ 	return session.select(sql, parameters.toMap(), mapper = dataClassMapper(Result::class))
  }
  ```
  
