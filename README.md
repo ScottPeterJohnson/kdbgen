@@ -3,7 +3,9 @@
 [![GitHub release](https://img.shields.io/github/release/qubyte/rubidium.svg)]()
  
  Experimental library for generating Kotlin DSL to interact with a Postgres database. 
- Currently supports basic select/insert/update/delete operations, and will map custom Postgres enum types.
+ Currently supports:
+  - Basic select/insert/update/delete operations on a single table
+  - Custom Postgres enum types
  
  The basic philosophy is:
  - The database should be the source of truth for Kotlin objects representing its rows, so those should be generated automatically.
@@ -22,7 +24,7 @@ task generatePostgresInterface(type : JavaExec){
    main = "net.justmachinery.kdbgen.GeneratePostgresInterfaceKt"
    args '--databaseUrl=jdbc:postgresql://localhost:5432/DATABASE?user=DATABASE_USER&password=DATABASE_PASSWORD'
    args '--enumPackage=some.company.database.enums'
-   args '--beanPackage=some.company.database.tables'
+   args '--tablePackage=some.company.database.tables'
    args '--outputDirectory=build/generated-sources/kotlin'
 }
 compileKotlin.dependsOn('generatePostgresInterface')
@@ -41,43 +43,64 @@ You will need to replace:
 
 ### Basic example
 
-A bunch of "TableRow" classes will be generated. These allow you to construct basic type-safe SQL queries.
-For example, suppose we have a "Users" table with a "uid", "email", and an optional "name".
-These will *only generate a SQL/parameter object*. Actually executing these queries is up to you.
+This library will *only generate an object containing SQL and named parameters*. Actually executing these queries is up to you, so some assembly is required.
 
-A reflection-based `dataClassMapper()` is provided for convenience. It can translate result sets into data classes. 
+A reflection-based `resultMapper()` is provided for convenience. It can translate result sets into data classes. 
 
-To actually use this, then, you'll probably want to write helpers like the following:
+The following example code is for interfacing with the [kwery-core](https://github.com/andrewoma/kwery/tree/master/core) library:
  ```kotlin
- inline fun <reified Result : Any> Operation<Result>.go(): List<Result> {
- 	return sql.select(this.sql, this.parameters, mapper = dataClassMapper(Result::class))
+ fun <Data : SqlResult> dataClassMapper(dataClass: KClass<Data>): (Row) -> Data {
+ 	val mapper = resultMapper(dataClass)
+ 	return {
+ 		mapper.invoke(it.resultSet)
+ 	}
+ }
+ 
+ fun <Op : SqlOp, On : OnTarget> Statement<Op, On, NotProvided>.execute(): Unit {
+ 	val (sql, parameters) = render(this)
+ 	io.jscry.database.sql.select(sql, parameters.toMap(), mapper = {})
+ }
+ 
+ inline fun <Op : SqlOp, On : OnTarget, reified Result : SqlResult> Statement<Op, On, Result>.query(): List<Result> {
+ 	val (sql, parameters) = render(this)
+ 	return io.jscry.database.sql.select(sql, parameters.toMap(), mapper = dataClassMapper(Result::class))
  }
  ```
  
- With that in mind:
+ Assume a basic users table with mandatory "uid", "email", and optional "name" fields. You can then do the following:
 
 #### Insert user
 ```kotlin
+//Inserts use a chained method call style to ensure that you have provided every non-defaultable field
 //Since "name" is optional, we don't have to provide it here.
-UsersRow.insert(uid = "test", email = "foo@bar").go()
+into(usersRow).insert { values { it
+    .uid("test")
+    .email("foo@bar")
+    //.name("John Foo")
+} }.execute()
+//If you omit either UID or email, the query will fail to typecheck.
 ```
 
 #### Select user
 ```kotlin
-//Find the user with uid "test"
-UsersRow.select(uid = "test").go().firstOrNull()
-//Find all users named "John Smith"
-UsersRow.select(name = "John Smith").go()
+//Find the user with uid "test". This will return a convenience data class containing all columns.
+from(users).selectAll().where { uid equalTo "test" }.query().firstOrNull()
+//Find the emails of all users named "John Smith". This will return just the email column.
+from(users).select(email).where { name equalTo "John Smith" }.query()
 ```
 
 #### Update user
 ```kotlin
-UsersRow.update(name = "Joe Smith").where(whereName = "test").go()
+//Support for returning from updates/inserts/deletes.
+from(users).update { name to "Joe Smith" }.where { name equalTo "test" }.returning(uid).query()
 ```
 
 ## Caveats
-- Null is used as "not provided" but can also be a valid database value- so this will work poorly with "null" columns
+- Library syntax may change.
+- Lots of imports required.
 
 ## TODO
+- Queries on more than one table
 - Upsert
-- More operation fluency (can currently only compare equality)
+- Conflict clauses
+- More operations

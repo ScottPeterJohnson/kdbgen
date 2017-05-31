@@ -14,16 +14,16 @@ import java.util.*
 val kdbGen = "net.justmachinery.kdbgen"
 
 val defaultOutputDirectory = "build/generated-sources/kotlin"
-val defaultEnumPackage = "net.justmachinery.dbgen.enums"
-val defaultBeanPackage = "net.justmachinery.dbgen.tables"
+val defaultEnumPackage = "net.justmachinery.kdbgen.enums"
+val defaultTablePackage = "net.justmachinery.kdbgen.tables"
 
 class Settings(parser : ArgParser){
 	val databaseUrl by parser.storing("URL of database to connect to (including user/pass)")
 	val outputDirectory by parser.storing("Directory to output generated source files to").default(defaultOutputDirectory)
 	val enumPackage by parser.storing("Package to output enum classes to").default(defaultEnumPackage)
-	val beanPackage by parser.storing("Package to output beans to").default(defaultBeanPackage)
+	val tablePackage by parser.storing("Package to output beans to").default(defaultTablePackage)
 	fun enumDirectory() : String = Paths.get(outputDirectory, enumPackage.replace(".", "/")).toString()
-	fun beanDirectory() : String = Paths.get(outputDirectory, beanPackage.replace(".", "/")).toString()
+	fun tableDirectory() : String = Paths.get(outputDirectory, tablePackage.replace(".", "/")).toString()
 }
 
 fun main(args : Array<String>){
@@ -33,7 +33,7 @@ fun main(args : Array<String>){
 
 fun run(settings : Settings){
 	File(settings.enumDirectory()).deleteRecursively()
-	File(settings.beanDirectory()).deleteRecursively()
+	File(settings.tableDirectory()).deleteRecursively()
 
 	val connection = DriverManager.getConnection(settings.databaseUrl, Properties()) as PgConnection
 
@@ -70,7 +70,6 @@ fun generateTableTypes(settings : Settings, connection : PgConnection, userEnumT
 	val types = mutableListOf<GeneratedType>()
 	while(tablesResultSet.next()){
 		val rawTableName = tablesResultSet.getString("table_name")
-		val typeName = underscoreToCamelCaseTypeName(rawTableName) + "Row"
 		val properties = mutableListOf<GeneratedProperty>()
 
 		val columnsResultSet = connection.metaData.getColumns(null, null, rawTableName, null)
@@ -80,13 +79,12 @@ fun generateTableTypes(settings : Settings, connection : PgConnection, userEnumT
 			val nullable = columnsResultSet.getString("is_nullable") != "NO"
 			properties.add(GeneratedProperty(
 					rawName = rawName,
-					memberName = underscoreToCamelCaseMemberName(rawName),
 					postgresType = postgresTypeName,
 					nullable = nullable,
 					defaultable = nullable || columnsResultSet.getString("column_def") != null
 			))
 		}
-		types.add(GeneratedType(rawName = rawTableName, typeName = typeName, generatedProperties = properties))
+		types.add(GeneratedType(rawName = rawTableName, generatedProperties = properties))
 	}
 	val renderer = Renderer(settings, userEnumTypes)
 	for(type in types){
@@ -94,8 +92,14 @@ fun generateTableTypes(settings : Settings, connection : PgConnection, userEnumT
 	}
 }
 
-data class GeneratedType(val rawName : String, val typeName : String, val generatedProperties: List<GeneratedProperty>)
-data class GeneratedProperty(val rawName : String, val memberName : String, val postgresType : String, val nullable : Boolean, val defaultable : Boolean)
+data class GeneratedType(val rawName : String, val generatedProperties: List<GeneratedProperty>) {
+	val className = underscoreToCamelCaseTypeName(rawName)
+	val memberName = underscoreToCamelCaseMemberName(rawName)
+}
+data class GeneratedProperty(val rawName : String, val postgresType : String, val nullable : Boolean, val defaultable : Boolean){
+	val className = underscoreToCamelCaseTypeName(rawName)
+	val memberName = underscoreToCamelCaseMemberName(rawName)
+}
 
 fun String.onlyWhen(condition : Boolean) : String {
 	return if(condition){ this } else { "" }
@@ -103,149 +107,87 @@ fun String.onlyWhen(condition : Boolean) : String {
 
 class Renderer(val settings : Settings, val userEnumTypes : List<String>) {
 	private val GeneratedProperty.kotlinType
-		get() = mapPostgresType(this.postgresType)
+		get() = mapPostgresType(this.postgresType).plus("?".onlyWhen(this.nullable))
 
 	fun renderType(type: GeneratedType) {
-		val kotlinPath = "${settings.beanDirectory()}/${type.typeName}.kt"
+		val kotlinPath = "${settings.tableDirectory()}/${type.className}.kt"
 		File(kotlinPath).let {
 			it.parentFile.mkdirs()
 			it.createNewFile()
 		}
 		val writer = OutputStreamWriter(FileOutputStream(kotlinPath))
-		writer.append("package ${settings.beanPackage}\n")
+		writer.append("package ${settings.tablePackage}\n")
 		renderImports(writer)
-		writer.append("data class ${type.typeName}(")
-		writer.append(type.generatedProperties.map({
-			"val ${it.memberName} : ${it.kotlinType}${"?".onlyWhen(it.nullable)}"
-		}).joinToString(", "))
-		writer.append(")\n")
-		writer.append("{\n")
-		renderCompanionMethods(type, writer)
+
+		renderRowClass(type, writer)
+
+		val tableClassName = "${type.className}Table"
+		writer.append("class $tableClassName : Table<${type.className}Row> {\n")
+			writer.append("\toverride val name = \"${type.rawName}\"\n")
+			renderColumnDefinitions(type, writer)
 		writer.append("}\n")
+		writer.append("val ${type.memberName} = ${type.className}Table()\n")
+
+		//Insert DSL support
+		val insertClassName = "${type.className}TableInsert"
+		writer.append("data class $insertClassName<${type.generatedProperties.map{it.className}.joinToString(", ")}>(\n")
+		writer.append(type.generatedProperties.map {
+			"\tval _${it.memberName} : NullHolder<${it.kotlinType}>? = null"
+		}.joinToString(",\n"))
+		writer.append("\n)\n")
+		writer.append("{\n")
+			writer.append("fun toCols() : List<Pair<TableColumn<$tableClassName, Any>,Any>> {\n")
+				writer.append("\treturn listOf(\n")
+					writer.append(type.generatedProperties.map{
+					"\t\t_${it.memberName}?.let { Pair($tableClassName.${it.memberName} as TableColumn<$tableClassName,Any>, it.value as Any) }"
+					}.joinToString(",\n"))
+				writer.append("\t).filterNotNull()\n")
+			writer.append("}\n")
+		writer.append("}\n")
+
+		val notProvided = type.generatedProperties.map{ if(it.defaultable) "Provided" else "NotProvided"}.joinToString(",")
+		val provided = type.generatedProperties.map{"Provided"}.joinToString(",")
+		writer.append("fun InsertInit<$tableClassName>.values(vals : ($insertClassName<$notProvided>)->$insertClassName<$provided>) : ColumnsToValues<$tableClassName> {\n")
+		writer.append("\tval insert = vals($insertClassName())\n")
+		writer.append("\treturn insert.toCols()\n")
+		writer.append("}\n")
+
+
+		type.generatedProperties.forEachIndexed { index, it ->
+			val parameters = (0..(type.generatedProperties.size - 2)).map { "P$it" }
+			val parameterization = { type : String ->
+				val list = parameters.toMutableList()
+				list.add(index, type)
+				list.joinToString(",")
+			}
+			val inputType = "$insertClassName<${parameterization(if(it.defaultable) "*" else "NotProvided")}>"
+			val resultType = "$insertClassName<${parameterization("Provided")}>"
+			val paramStr = if(parameters.isNotEmpty()) "<${parameters.joinToString(",")}>" else ""
+			writer.append("fun $paramStr $inputType.${it.memberName}(${it.memberName} : ${it.kotlinType}) : $resultType = this.copy(_${it.memberName} = NullHolder(${it.memberName})) as $resultType\n")
+		}
 		writer.close()
 	}
 
+	fun renderRowClass(type: GeneratedType, writer : OutputStreamWriter){
+		writer.append("data class ${type.className}Row(")
+		writer.append(type.generatedProperties.map({
+			"val ${it.memberName} : ${it.kotlinType}${"?".onlyWhen(it.nullable)}"
+		}).joinToString(", "))
+		writer.append(") : SqlResult\n")
+	}
+
 	fun renderImports(writer: OutputStreamWriter) {
-		writer.append("import $kdbGen.InsertOperation\n")
-		writer.append("import $kdbGen.SelectOperation\n")
-		writer.append("import $kdbGen.DeleteOperation\n")
-		writer.append("import $kdbGen.UpdateOperation\n")
+		writer.append("import $kdbGen.*\n")
 		writer.append("import javax.annotation.CheckReturnValue\n")
 		writer.append("import java.sql.ResultSet\n")
 	}
 
-	fun renderCompanionMethods(type: GeneratedType, writer: OutputStreamWriter) {
+	fun renderColumnDefinitions(type: GeneratedType, writer: OutputStreamWriter) {
 		writer.append("\tcompanion object { \n")
-		renderInsert(type, writer)
-		renderSelect(type, writer)
-		renderDelete(type, writer)
-		renderUpdate(type, writer)
+		type.generatedProperties.forEach {
+			writer.append("\t\tval ${it.memberName} = TableColumn<${type.className}Table, ${it.kotlinType}>(\"${it.rawName}\", \"${it.postgresType}\", ${userEnumTypes.contains(it.postgresType)})\n")
+		}
 		writer.append("\t }\n")
-	}
-
-	fun propertiesList(type: GeneratedType, transform: (GeneratedProperty) -> String): String {
-		return type.generatedProperties.map(transform).joinToString(", ")
-	}
-
-	fun renderParameters(
-			type: GeneratedType,
-			optional: (GeneratedProperty) -> Boolean,
-			nameGenerator: (GeneratedProperty) -> String = { it.memberName },
-			defaultable: Boolean = true
-	): String {
-		return propertiesList(type) {
-			"${nameGenerator(it)} : ${it.kotlinType}${"?${" = null".onlyWhen(defaultable)}".onlyWhen(optional(it))}"
-		}
-	}
-
-	fun renderFunction(checkReturnValue: Boolean = true,
-	                   name: String,
-	                   parameters: String,
-	                   returnType: String,
-	                   body: String): String {
-		return "\t\t${"@CheckReturnValue".onlyWhen(checkReturnValue)} fun $name($parameters) : $returnType {\n\t\t\t$body\n\t\t}\n"
-	}
-
-	fun renderInsert(type: GeneratedType, writer: OutputStreamWriter) {
-		val columnNames = propertiesList(type) { it.rawName }
-		val columnValues = propertiesList(type) {
-			if (it.defaultable) "\${if(${it.memberName} == null) \"DEFAULT\" else \"${propSqlParam(it)}\"}"
-			else propSqlParam(it)
-		}
-		val innerSql = "INSERT INTO ${type.rawName}($columnNames) VALUES ($columnValues) RETURNING *"
-		val mapContents = propertiesList(type) { "Pair(\"${it.memberName}\", ${transformValueAsNecessary(it.memberName, it.postgresType)})" }
-		writer.append(renderFunction(
-				name = "insert",
-				parameters = renderParameters(type, optional = { it.defaultable }),
-				returnType = "InsertOperation<${type.typeName}>",
-				body = "return InsertOperation(\"$innerSql\", mapOf($mapContents))"
-		))
-	}
-
-	fun renderSelect(type: GeneratedType, writer: OutputStreamWriter) {
-		val parameterConditions = propertiesList(type) {
-			"if(${it.memberName} != null) \"${it.rawName} = ${propSqlParam(it)}\" else null"
-		}
-		val innerSql = "SELECT * FROM ${type.rawName} WHERE \${listOf($parameterConditions).filterNotNull().joinToString(\" AND \")}"
-		val mapContents = propertiesList(type) { "Pair(\"${it.memberName}\", ${transformValueAsNecessary(it.memberName, it.postgresType)})" }
-		writer.append(renderFunction(
-				name = "select",
-				parameters = renderParameters(type, optional = { true }),
-				returnType = "SelectOperation<${type.typeName}>",
-				body = "return SelectOperation(\"$innerSql\", mapOf($mapContents))"
-		))
-	}
-
-	fun renderDelete(type: GeneratedType, writer: OutputStreamWriter) {
-		val parameterConditions = propertiesList(type) {
-			"if(${it.memberName} != null) \"${it.rawName} = ${propSqlParam(it)}\" else null"
-		}
-		val innerSql = "DELETE FROM ${type.rawName} WHERE \${listOf($parameterConditions).filterNotNull().joinToString(\" AND \")} RETURNING *"
-		val mapContents = propertiesList(type) { "Pair(\"${it.memberName}\", ${transformValueAsNecessary(it.memberName, it.postgresType)})" }
-		writer.append(renderFunction(
-				name = "delete",
-				parameters = renderParameters(type, optional = { true }),
-				returnType = "DeleteOperation<${type.typeName}>",
-				body = "return DeleteOperation(\"$innerSql\", mapOf($mapContents))"
-		))
-	}
-
-	fun renderUpdate(type: GeneratedType, writer: OutputStreamWriter) {
-		val whereMember: (GeneratedProperty) -> String = { "where" + it.memberName.capitalize() }
-		val updateParameters = renderParameters(type, optional = { true })
-		val whereParametersWithDefaults = renderParameters(type, optional = { true }, nameGenerator = whereMember)
-		val whereParametersNoDefaults = renderParameters(type,
-				optional = { true },
-				defaultable = false,
-				nameGenerator = whereMember)
-		val updateInterfaceName = "Update${type.typeName}"
-		val updates = propertiesList(type) { "if(${it.memberName} != null) \"${it.rawName} = ${propSqlParam(it)}\" else null" }
-		val conditions = propertiesList(type) {
-			"if(${whereMember(it)} != null) \"${it.rawName} = ${propSqlParam(it, name = whereMember(it))}\" else null"
-		}
-		val updateSql = "UPDATE ${type.rawName} SET \${listOf($updates).filterNotNull().joinToString(\", \")} WHERE \${listOf($conditions).filterNotNull().joinToString(\" AND \")} RETURNING *"
-		val mapContents = propertiesList(type) {
-			"Pair(\"${it.memberName}\", ${it.memberName}),Pair(\"${whereMember(it)}\", ${transformValueAsNecessary(whereMember(it), it.postgresType)})"
-		}
-		writer.append("\t\tinterface $updateInterfaceName { fun where($whereParametersWithDefaults) : UpdateOperation<${type.typeName}> }\n")
-		writer.append(renderFunction(
-				name = "update",
-				parameters = updateParameters,
-				returnType = updateInterfaceName,
-				body = "return object : $updateInterfaceName { override fun where($whereParametersNoDefaults) : UpdateOperation<${type.typeName}>{ return UpdateOperation(\"$updateSql\", mapOf($mapContents)) } }"
-		))
-	}
-
-	fun propSqlParam(it: GeneratedProperty, name: String = it.memberName): String {
-		return castAsNecessary(":" + name, it.postgresType)
-	}
-
-	fun transformValueAsNecessary(value : String, type : String) : String {
-		if(userEnumTypes.contains(type)){
-			return "$value.toString()"
-		} else {
-			return value
-		}
 	}
 
 	fun castAsNecessary(value: String, type: String): String {
@@ -264,8 +206,8 @@ class Renderer(val settings : Settings, val userEnumTypes : List<String>) {
 			"integer" -> Int::class
 			"int" -> Int::class
 			"int4" -> Int::class
-			"json" -> String::class
-			"jsonb" -> String::class
+			"json" -> Json::class
+			"jsonb" -> Json::class
 			"text" -> String::class
 			"timestamp" -> Timestamp::class
 			"uuid" -> UUID::class
