@@ -111,7 +111,7 @@ internal data class StatementImpl<Operation, On, Returning>(
 		var setValues: ColumnsToValues<On>? = null,
 		//If list is empty, return *
 		var selectColumns : List<TableColumn<*, *>>? = null,
-		var whereClauses : List<Pair<String, Pair<Int, Any>>> = emptyList()
+		var whereClauses : List<Pair<String, Pair<String, Any>>> = emptyList()
 ) :
 		Statement<Operation, On, Returning>,
 		WhereInit<On>,
@@ -119,13 +119,21 @@ internal data class StatementImpl<Operation, On, Returning>(
 		UpdateInit<On>
 {
 	fun addWhereClause(init : (paramName: String)->Pair<String,Any>){
-		val param = parameterCount++
-		val (clause, value) = init(param.toString())
+		val param = toParameterName(parameterCount++)
+		val (clause, value) = init(param)
 		whereClauses += Pair(clause, Pair(param, value))
 	}
 	fun addTableColumnValue(pair : Pair<TableColumn<On,Any>, Any>){
 		setValues = setValues!! + pair
 	}
+}
+
+internal val characters = "abcdefghijklmnopqrstuvwxyz"
+/**
+ * Generate an alphabetic parameter name from a counter
+ */
+fun toParameterName(num : Int) : String {
+	return "gen_" + num.toString(26).map { characters[Integer.valueOf(it.toString(), 26)] }.joinToString("")
 }
 
 
