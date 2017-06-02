@@ -19,9 +19,10 @@ fun <Data : SqlResult> resultMapper(dataClass: KClass<Data>): (ResultSet) -> Dat
 
 	if(dataClass.isSubclassOf(ResultTuple::class)){
 		return {
-			constructor.call(parameters.mapIndexed { index, (parameter, _) ->
-				convertFromResultSet(it.getObject(index), parameter)
-			})
+			constructor.call(*parameters.mapIndexed { index, (parameter, _) ->
+				//Remember: JDBC resultsets start at 1 because... reasons
+				convertFromResultSet(it.getObject(index + 1), parameter)
+			}.toTypedArray())
 		}
 	} else {
 		//Data class

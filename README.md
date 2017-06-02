@@ -58,7 +58,7 @@ The following example code is for interfacing with the [kwery-core](https://gith
  
  fun <Op : SqlOp, On : OnTarget> Statement<Op, On, NotProvided>.execute(): Unit {
  	val (sql, parameters) = render(this)
- 	session.select(sql, parameters.toMap(), mapper = {})
+ 	session.update(sql, parameters.toMap())
  }
  
  inline fun <Op : SqlOp, On : OnTarget, reified Result : SqlResult> Statement<Op, On, Result>.query(): List<Result> {
