@@ -8,7 +8,7 @@ fun <S : Statement<*, T, *>, T : Table<*>>
 
 interface WhereInit<Table>{
 	private fun <Value> TableColumn<Table, Value>.clause(op : String, value : Value){
-		(this@WhereInit as StatementImpl<*,*,*>).addWhereClause { Pair("${this.name} $op ${this.asParameter(it)}", value as Any) }
+		(this@WhereInit as StatementImpl<*,*,*>).addWhereClause { Pair("${this.name} $op ${this.asParameter(it)}", value as Any?) }
 	}
 
 	infix fun <Value> TableColumn<Table, Value>.equalTo(value : Value) = clause("=", value)

@@ -31,7 +31,7 @@ class TableColumn<Table, Type>(val name : String, val rawType : String, val post
 interface Provided //Required value has been provided
 interface NotProvided //Value has not been provided
 
-typealias ColumnsToValues<On> = List<Pair<TableColumn<On, Any>, Any>>
+typealias ColumnsToValues<On> = List<Pair<TableColumn<On, Any?>, Any?>>
 //Simple holder class for nullable values (so that the holder itself can be null to represent non-provided values)
 data class NullHolder<out T>(val value: T)
 
@@ -42,7 +42,7 @@ interface InsertInit<Table>
 interface UpdateInit<Table>{
 	infix fun <Value> TableColumn<Table, Value>.to(value : Value) {
 		@Suppress("UNCHECKED_CAST")
-		(this@UpdateInit as StatementImpl<*,Table,*>).addTableColumnValue(Pair(this, value) as Pair<TableColumn<Table, Any>, Any>)
+		(this@UpdateInit as StatementImpl<*,Table,*>).addTableColumnValue(Pair(this, value) as Pair<TableColumn<Table, Any?>, Any?>)
 	}
 }
 
@@ -69,10 +69,10 @@ fun <S : Statement<NotProvided, T, NotProvided>, T : Table<*>>
 }
 
 
-fun <Op : SqlOp, On : OnTarget, Result> render(statement : Statement<Op, On, Result>) : Pair<String, List<Pair<String, Any>>> {
+fun <Op : SqlOp, On : OnTarget, Result> render(statement : Statement<Op, On, Result>) : Pair<String, List<Pair<String, Any?>>> {
 	statement as StatementImpl<Op, On, Result>
 	var sql : String
-	var parameters : List<Pair<String,Any>> = statement.whereClauses.map { Pair(it.second.first.toString(), it.second.second) }
+	var parameters : List<Pair<String,Any?>> = statement.whereClauses.map { Pair(it.second.first, it.second.second) }
 	if(statement.type == StatementType.SELECT){
 		sql = "SELECT ${statement.selectColumns?.map { it.name }?.joinToString(", ") ?: "*"}"
 		sql += " FROM ${statement.on.name}"
@@ -115,19 +115,19 @@ internal data class StatementImpl<Operation, On, Returning>(
 		var setValues: ColumnsToValues<On>? = null,
 		//If list is empty, return *
 		var selectColumns : List<TableColumn<*, *>>? = null,
-		var whereClauses : List<Pair<String, Pair<String, Any>>> = emptyList()
+		var whereClauses : List<Pair<String, Pair<String, Any?>>> = emptyList()
 ) :
 		Statement<Operation, On, Returning>,
 		WhereInit<On>,
 		InsertInit<On>,
 		UpdateInit<On>
 {
-	fun addWhereClause(init : (paramName: String)->Pair<String,Any>){
+	fun addWhereClause(init : (paramName: String)->Pair<String,Any?>){
 		val param = toParameterName(parameterCount++)
 		val (clause, value) = init(param)
 		whereClauses += Pair(clause, Pair(param, value))
 	}
-	fun addTableColumnValue(pair : Pair<TableColumn<On,Any>, Any>){
+	fun addTableColumnValue(pair : Pair<TableColumn<On,Any?>, Any?>){
 		setValues = setValues!! + pair
 	}
 }

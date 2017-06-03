@@ -136,10 +136,10 @@ class Renderer(val settings : Settings, val userEnumTypes : List<String>) {
 		}.joinToString(",\n"))
 		writer.append("\n)\n")
 		writer.append("{\n")
-			writer.append("fun toCols() : List<Pair<TableColumn<$tableClassName, Any>,Any>> {\n")
+			writer.append("fun toCols() : List<Pair<TableColumn<$tableClassName, Any?>,Any?>> {\n")
 				writer.append("\treturn listOf(\n")
 					writer.append(type.generatedProperties.map{
-					"\t\t_${it.memberName}?.let { Pair($tableClassName.${it.memberName} as TableColumn<$tableClassName,Any>, it.value as Any) }"
+					"\t\t_${it.memberName}?.let { Pair($tableClassName.${it.memberName} as TableColumn<$tableClassName,Any>, it.value as Any?) }"
 					}.joinToString(",\n"))
 				writer.append("\t).filterNotNull()\n")
 			writer.append("}\n")
