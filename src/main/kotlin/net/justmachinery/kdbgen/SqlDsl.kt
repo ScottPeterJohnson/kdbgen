@@ -95,7 +95,11 @@ fun <Op : SqlOp, On : OnTarget, Result> render(statement : Statement<Op, On, Res
 		sql += " WHERE " + statement.whereClauses.map { it.first }.joinToString(" AND ")
 	}
 	if(statement.type != StatementType.SELECT && statement.selectColumns != null){
-		sql += " RETURNING " + statement.selectColumns!!.map {it.name}.joinToString(", ")
+		if(statement.selectColumns!!.isEmpty()){
+			sql += " RETURNING *"
+		} else {
+			sql += " RETURNING " + statement.selectColumns!!.map { it.name }.joinToString(", ")
+		}
 	}
 	return Pair(sql, parameters)
 }
