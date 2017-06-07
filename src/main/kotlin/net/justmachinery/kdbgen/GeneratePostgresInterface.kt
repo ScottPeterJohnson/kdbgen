@@ -139,7 +139,7 @@ class Renderer(val settings : Settings, val userEnumTypes : List<String>) {
 			writer.append("fun toCols() : List<Pair<TableColumn<$tableClassName, Any?>,Any?>> {\n")
 				writer.append("\treturn listOf(\n")
 					writer.append(type.generatedProperties.map{
-					"\t\t_${it.memberName}?.let { Pair($tableClassName.${it.memberName} as TableColumn<$tableClassName,Any>, it.value as Any?) }"
+					"\t\t_${it.memberName}?.let { Pair($tableClassName.${it.memberName} as TableColumn<$tableClassName,Any?>, it.value as Any?) }"
 					}.joinToString(",\n"))
 				writer.append("\t).filterNotNull()\n")
 			writer.append("}\n")
@@ -218,6 +218,10 @@ class Renderer(val settings : Settings, val userEnumTypes : List<String>) {
 		}
 		if (userEnumTypes.contains(postgresType)) {
 			return "${settings.enumPackage}.${underscoreToCamelCaseTypeName(postgresType)}"
+		}
+		if(postgresType.startsWith("_")){
+			val arrayType = mapPostgresType(postgresType.substring(startIndex = 1))
+			return "kotlin.collections.List<$arrayType>"
 		}
 		throw IllegalStateException("Unknown postgres type $postgresType")
 	}
