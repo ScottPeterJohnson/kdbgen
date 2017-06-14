@@ -38,7 +38,6 @@ data class NullHolder<out T>(val value: T)
 /**
  * Markers for DSLs
  */
-interface InsertInit<Table>
 interface UpdateInit<Table>{
 	infix fun <Value> TableColumn<Table, Value>.to(value : Value) {
 		@Suppress("UNCHECKED_CAST")
@@ -62,11 +61,6 @@ fun <S : Statement<NotProvided, T, NotProvided>, T : Table<*>>
 	return toBase(this).copy().apply { type = StatementType.UPDATE; setValues = emptyList(); init() } as Statement<Update, T, NotProvided>
 }
 
-@Suppress("UNCHECKED_CAST")
-fun <S : Statement<NotProvided, T, NotProvided>, T : Table<*>>
-		S.insert(init : InsertInit<T>.()-> ColumnsToValues<T>) : Statement<Insert, T, NotProvided> {
-	return toBase(this).copy().apply { type = StatementType.INSERT; setValues = init() } as Statement<Insert, T, NotProvided>
-}
 
 
 fun <Op : SqlOp, On : OnTarget, Result> render(statement : Statement<Op, On, Result>) : Pair<String, List<Pair<String, Any?>>> {
@@ -82,6 +76,7 @@ fun <Op : SqlOp, On : OnTarget, Result> render(statement : Statement<Op, On, Res
 		parameters += statement.setValues!!.map { Pair(it.first.name, it.second) }
 		sql = "INSERT INTO ${statement.on.name}($columns) VALUES($values)"
 	} else if (statement.type == StatementType.UPDATE) {
+		if(statement.setValues?.isEmpty() ?: true){ throw IllegalStateException("No update provided for UPDATE statement: $statement") }
 		val sets = statement.setValues!!.map { it.first.name + " = " + it.first.asParameter()}.joinToString(", ")
 		parameters += statement.setValues!!.map { Pair(it.first.name, it.second) }
 		sql = "UPDATE ${statement.on.name} SET $sets"

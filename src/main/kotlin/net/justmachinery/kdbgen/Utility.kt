@@ -5,10 +5,7 @@ import java.sql.ResultSet
 import java.util.concurrent.TimeUnit
 import kotlin.reflect.KClass
 import kotlin.reflect.KParameter
-import kotlin.reflect.full.isSubclassOf
-import kotlin.reflect.full.isSubtypeOf
-import kotlin.reflect.full.primaryConstructor
-import kotlin.reflect.full.starProjectedType
+import kotlin.reflect.full.*
 import kotlin.reflect.jvm.jvmErasure
 
 typealias Json = String
@@ -41,7 +38,7 @@ private fun convertFromResultSet(value : Any?, parameter : KParameter) : Any?  {
 	if (value is PGobject) {
 		result = value.value
 	}
-	if (result is String && parameter.type.isSubtypeOf(Enum::class.starProjectedType)) {
+	if (result is String && parameter.type.withNullability(false).isSubtypeOf(Enum::class.starProjectedType)) {
 		val typeClass = parameter.type.jvmErasure.java
 		result = reflectionCreateEnum(typeClass, result)
 	}
