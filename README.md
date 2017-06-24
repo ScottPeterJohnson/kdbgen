@@ -99,6 +99,10 @@ from(users).update { name to "Joe Smith" }.where { name equalTo "test" }.returni
 - Library syntax may change.
 - Lots of imports required.
 
+## Array Types
+- These will convert to/from lists
+- It's expected that a named query parameter :foo with value [1,2,3] is translated to ?,?,?
+
 ## TODO
 - Queries on more than one table
 - Upsert

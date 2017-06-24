@@ -19,7 +19,8 @@ interface Table<DataRow> : OnTarget
 //Represents a column in table that maps to Kotlin Type
 class TableColumn<Table, Type>(val name : String, val rawType : String, val postgresEnum : Boolean){
 	fun asParameter(name : String = this.name) : String {
-		if (listOf("inet", "jsonb").contains(rawType) || postgresEnum){ return "CAST (:$name AS $rawType)"}
+		if(rawType.endsWith("[]")){ return "ARRAY [:$name]::$rawType" }
+		else if (listOf("inet", "jsonb").contains(rawType) || postgresEnum){ return "CAST (:$name AS $rawType)"}
 		else { return ":$name" }
 	}
 }
@@ -96,15 +97,9 @@ fun <Op : SqlOp, On : OnTarget, Result> render(statement : Statement<Op, On, Res
 			sql += " RETURNING " + statement.selectColumns!!.map { it.name }.joinToString(", ")
 		}
 	}
-	return Pair(sql, parameters.map({ Pair(it.first, convertParameter(it.second)) }))
+	return Pair(sql, parameters)
 }
 
-internal fun convertParameter(param : Any?) : Any? {
-	if(param is Collection<*>){
-		return param.toTypedArray()
-	}
-	return param
-}
 
 internal enum class StatementType {
 	SELECT, UPDATE, INSERT, DELETE
