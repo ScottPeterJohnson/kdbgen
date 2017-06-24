@@ -1,10 +1,12 @@
 package net.justmachinery.kdbgen
 
+import org.postgresql.jdbc.PgArray
 import org.postgresql.util.PGobject
 import java.sql.ResultSet
 import java.util.concurrent.TimeUnit
 import kotlin.reflect.KClass
 import kotlin.reflect.KParameter
+import kotlin.reflect.KType
 import kotlin.reflect.full.*
 import kotlin.reflect.jvm.jvmErasure
 
@@ -18,7 +20,7 @@ fun <Data : SqlResult> resultMapper(dataClass: KClass<Data>): (ResultSet) -> Dat
 		return {
 			constructor.call(*parameters.mapIndexed { index, (parameter, _) ->
 				//Remember: JDBC resultsets start at 1 because... reasons
-				convertFromResultSet(it.getObject(index + 1), parameter)
+				convertFromResultSet(it.getObject(index + 1), parameter.type)
 			}.toTypedArray())
 		}
 	} else {
@@ -26,20 +28,25 @@ fun <Data : SqlResult> resultMapper(dataClass: KClass<Data>): (ResultSet) -> Dat
 		return {
 			val parameterMap = mutableMapOf<KParameter, Any?>()
 			for ((parameter, sqlName) in parameters) {
-				parameterMap[parameter] = convertFromResultSet(it.getObject(sqlName), parameter)
+				parameterMap[parameter] = convertFromResultSet(it.getObject(sqlName), parameter.type)
 			}
 			constructor.callBy(parameterMap)
 		}
 	}
 }
 
-private fun convertFromResultSet(value : Any?, parameter : KParameter) : Any?  {
+private fun convertFromResultSet(value : Any?, type : KType) : Any?  {
 	var result : Any? = value
 	if (value is PGobject) {
 		result = value.value
 	}
-	if (result is String && parameter.type.withNullability(false).isSubtypeOf(Enum::class.starProjectedType)) {
-		val typeClass = parameter.type.jvmErasure.java
+	if(value is PgArray){
+		val arrayType = type.arguments[0].type ?: Object::class.starProjectedType
+		val array = value.array as Array<*>
+		result = array.toList().map { convertFromResultSet(it, arrayType) }
+	}
+	if (result is String && type.withNullability(false).isSubtypeOf(Enum::class.starProjectedType)) {
+		val typeClass = type.jvmErasure.java
 		result = reflectionCreateEnum(typeClass, result)
 	}
 	return result
