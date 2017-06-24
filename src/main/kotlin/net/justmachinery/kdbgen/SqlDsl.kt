@@ -39,7 +39,7 @@ data class NullHolder<out T>(val value: T)
  * Markers for DSLs
  */
 interface UpdateInit<Table>{
-	infix fun <Value> TableColumn<Table, Value>.to(value : Value) {
+	infix fun <Value> TableColumn<Table, Value>.setTo(value : Value) {
 		@Suppress("UNCHECKED_CAST")
 		(this@UpdateInit as StatementImpl<*,Table,*>).addTableColumnValue(Pair(this, value) as Pair<TableColumn<Table, Any?>, Any?>)
 	}
@@ -96,9 +96,15 @@ fun <Op : SqlOp, On : OnTarget, Result> render(statement : Statement<Op, On, Res
 			sql += " RETURNING " + statement.selectColumns!!.map { it.name }.joinToString(", ")
 		}
 	}
-	return Pair(sql, parameters)
+	return Pair(sql, parameters.map({ Pair(it.first, convertParameter(it.second)) }))
 }
 
+internal fun convertParameter(param : Any?) : Any? {
+	if(param is Collection<*>){
+		return param.toTypedArray()
+	}
+	return param
+}
 
 internal enum class StatementType {
 	SELECT, UPDATE, INSERT, DELETE
