@@ -41,7 +41,9 @@ private fun convertFromResultSet(value : Any?, type : KType) : Any?  {
 		result = value.value
 	}
 	if(value is PgArray){
-		val arrayType = type.arguments[0].type ?: Object::class.starProjectedType
+		val arrayType : KType
+		if(type.arguments.isNotEmpty()) { arrayType = type.arguments[0].type ?: Object::class.starProjectedType }
+		else { arrayType = Object::class.starProjectedType }
 		val array = value.array as Array<*>
 		result = array.toList().map { convertFromResultSet(it, arrayType) }
 	}

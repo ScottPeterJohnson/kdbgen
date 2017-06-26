@@ -5,8 +5,8 @@ interface InsertInit<Table>
 
 @Suppress("UNCHECKED_CAST")
 fun <S : Statement<NotProvided, T, NotProvided>, T : Table<*>>
-		S.insert(init : InsertInit<T>.()-> ColumnsToValues<T>) : Statement<Insert, T, NotProvided> {
-	return toBase(this).copy().apply { type = StatementType.INSERT; setValues = init() } as Statement<Insert, T, NotProvided>
+		S.insert(init : InsertInit<T>.()-> List<ColumnsToValues<T>>) : Statement<Insert, T, NotProvided> {
+	return toBase(this).copy().apply { type = StatementType.INSERT; insertValues.addAll(init()) } as Statement<Insert, T, NotProvided>
 }
 
 sealed class InsertValue<T> {

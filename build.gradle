@@ -21,9 +21,22 @@ apply plugin: 'maven-publish'
 
 group 'net.justmachinery'
 description = "Utility to generate Kotlin classes to interface with a database"
-version = '0.2.15'
+version = '0.3.0'
 
 sourceCompatibility = 1.8
+
+sourceSets {
+    test.kotlin.srcDirs += "build/generated-sources/kotlin"
+}
+
+task generatePostgresInterface(type : JavaExec){
+    classpath = sourceSets.test.compileClasspath
+    main = "net.justmachinery.kdbgen.GeneratePostgresInterfaceKt"
+    args '--databaseUrl=jdbc:postgresql://localhost:5432/kdbgentest?user=kdbgentest&password=kdbgentest'
+    args '--enumPackage=net.justmachinery.kdbgen.test.generated.enums'
+    args '--tablePackage=net.justmachinery.kdbgen.test.generated.tables'
+}
+compileTestKotlin.dependsOn('generatePostgresInterface')
 
 
 repositories {
@@ -37,6 +50,7 @@ dependencies {
     compile "org.postgresql:postgresql:9.4.1212"
     compile "org.jetbrains.kotlin:kotlin-reflect:$kotlin_version"
     compile "com.xenomachina:kotlin-argparser:2.0.0"
+    testCompile 'io.kotlintest:kotlintest:2.0.3'
 }
 
 task sourcesJar(type:Jar, dependsOn: classes){

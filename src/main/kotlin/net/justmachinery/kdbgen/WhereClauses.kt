@@ -1,14 +1,14 @@
 package net.justmachinery.kdbgen
 
 fun <S : Statement<*, T, *>, T : Table<*>>
-		S.where(where : WhereInit<T>.()->Unit) : S {
+		S.where(where : WhereInit<T>.(table : T)->Unit) : S {
 	@Suppress("UNCHECKED_CAST")
-	return toBase(this).copy().apply(where) as S
+	return toBase(this).copy().apply({ where(this.on) } ) as S
 }
 
 interface WhereInit<Table>{
 	private fun <Value> TableColumn<Table, Value>.clause(op : String, value : Value){
-		(this@WhereInit as StatementImpl<*,*,*>).addWhereClause { Pair("${this.name} $op ${this.asParameter(it)}", value as Any?) }
+		(this@WhereInit as StatementImpl<*,*,*>).addWhereClause("${this.name} $op ${this.asParameter()}", this.rawType, value as Any?)
 	}
 
 	infix fun <Value> TableColumn<Table, Value>.equalTo(value : Value) = clause("=", value)

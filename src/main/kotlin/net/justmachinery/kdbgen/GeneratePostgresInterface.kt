@@ -126,7 +126,7 @@ class Renderer(val settings : Settings, val userEnumTypes : List<String>) {
 			writer.append("\toverride val name = \"${type.rawName}\"\n")
 			renderColumnDefinitions(type, writer)
 		writer.append("}\n")
-		writer.append("val ${type.memberName} = ${type.className}Table()\n")
+		writer.append("val ${type.memberName}Table = ${type.className}Table()\n")
 
 		//Insert DSL support
 		val insertClassName = "${type.className}TableInsert"
@@ -139,7 +139,7 @@ class Renderer(val settings : Settings, val userEnumTypes : List<String>) {
 			writer.append("fun toCols() : List<Pair<TableColumn<$tableClassName, Any?>,Any?>> {\n")
 				writer.append("\treturn listOf(\n")
 					writer.append(type.generatedProperties.map{
-					"\t\t_${it.memberName}?.let { Pair($tableClassName.${it.memberName} as TableColumn<$tableClassName,Any?>, it.value as Any?) }"
+					"\t\t_${it.memberName}?.let { Pair(${type.memberName}Table.${it.memberName} as TableColumn<$tableClassName,Any?>, it.value as Any?) }"
 					}.joinToString(",\n"))
 				writer.append("\t).filterNotNull()\n")
 			writer.append("}\n")
@@ -147,9 +147,12 @@ class Renderer(val settings : Settings, val userEnumTypes : List<String>) {
 
 		val notProvided = type.generatedProperties.map{ if(it.defaultable) "Provided" else "NotProvided"}.joinToString(",")
 		val provided = type.generatedProperties.map{"Provided"}.joinToString(",")
-		writer.append("fun InsertInit<$tableClassName>.values(vals : ($insertClassName<$notProvided>)->$insertClassName<$provided>) : ColumnsToValues<$tableClassName> {\n")
-		writer.append("\tval insert = vals($insertClassName())\n")
-		writer.append("\treturn insert.toCols()\n")
+		writer.append("fun InsertInit<$tableClassName>.values(vals : ($insertClassName<$notProvided>)->$insertClassName<$provided>) : List<ColumnsToValues<$tableClassName>> { return this.values(*arrayOf(vals)) }\n")
+		writer.append("fun InsertInit<$tableClassName>.values(vararg vals : ($insertClassName<$notProvided>)->$insertClassName<$provided>) : List<ColumnsToValues<$tableClassName>> {\n")
+		writer.append("\treturn vals.map {\n")
+		writer.append("\t\tval insert = it($insertClassName())\n")
+		writer.append("\t\tinsert.toCols()\n")
+		writer.append("\t}")
 		writer.append("}\n")
 
 
@@ -183,11 +186,9 @@ class Renderer(val settings : Settings, val userEnumTypes : List<String>) {
 	}
 
 	fun renderColumnDefinitions(type: GeneratedType, writer: OutputStreamWriter) {
-		writer.append("\tcompanion object { \n")
 		type.generatedProperties.forEach {
-			writer.append("\t\tval ${it.memberName} = TableColumn<${type.className}Table, ${it.kotlinType}>(\"${it.rawName}\", \"${it.postgresType}\", ${userEnumTypes.contains(it.postgresType)})\n")
+			writer.append("\tval ${it.memberName} = TableColumn<${type.className}Table, ${it.kotlinType}>(\"${it.rawName}\", \"${it.postgresType}\", ${userEnumTypes.contains(it.postgresType)})\n")
 		}
-		writer.append("\t }\n")
 	}
 
 	fun castAsNecessary(value: String, type: String): String {
