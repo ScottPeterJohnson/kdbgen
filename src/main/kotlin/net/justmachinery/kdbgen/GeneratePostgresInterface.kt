@@ -123,7 +123,7 @@ class Renderer(val settings : Settings, val userEnumTypes : List<String>) {
 
 		val tableClassName = "${type.className}Table"
 		writer.append("class $tableClassName : Table<${type.className}Row> {\n")
-			writer.append("\toverride val name = \"${type.rawName}\"\n")
+			writer.append("\toverride val _name = \"${type.rawName}\"\n")
 			renderColumnDefinitions(type, writer)
 		writer.append("}\n")
 		writer.append("val ${type.memberName}Table = ${type.className}Table()\n")

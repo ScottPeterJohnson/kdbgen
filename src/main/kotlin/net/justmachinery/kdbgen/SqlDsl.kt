@@ -15,7 +15,7 @@ interface Insert : SqlOp
 interface Delete : SqlOp
 
 //Marker interface for anything which counts as tables for SQL to act on
-interface OnTarget { val name : String }
+interface OnTarget { val _name: String }
 //Represents a table whose whole-row data class is DataRow
 interface Table<DataRow> : OnTarget
 //Represents a column in table that maps to Kotlin Type
@@ -72,7 +72,7 @@ fun <Op : SqlOp, On : OnTarget, Result> render(statement : Statement<Op, On, Res
 	var parameters : List<Parameter> = emptyList()
 	if(statement.type == StatementType.SELECT){
 		sql = "SELECT ${statement.selectColumns?.map { it.name }?.joinToString(", ") ?: "*"}"
-		sql += " FROM ${statement.on.name}"
+		sql += " FROM ${statement.on._name}"
 	} else if (statement.type == StatementType.INSERT) {
 		val columns = statement.insertValues.first().map { it.first.name }.joinToString(", ")
 		val values = statement.insertValues.map { "(" + it.map { it.first.asParameter() }.joinToString(", ") + ")" }
@@ -80,7 +80,7 @@ fun <Op : SqlOp, On : OnTarget, Result> render(statement : Statement<Op, On, Res
 				postgresType = it.first.rawType,
 				value = it.second
 		) } }
-		sql = "INSERT INTO ${statement.on.name}($columns) VALUES ${values.joinToString(",")}"
+		sql = "INSERT INTO ${statement.on._name}($columns) VALUES ${values.joinToString(",")}"
 	} else if (statement.type == StatementType.UPDATE) {
 		if(statement.updateValues.isEmpty()){ throw IllegalStateException("No update provided for UPDATE statement: $statement") }
 		val sets = statement.updateValues.map { it.first.name + " = " + it.first.asParameter()}.joinToString(", ")
@@ -88,9 +88,9 @@ fun <Op : SqlOp, On : OnTarget, Result> render(statement : Statement<Op, On, Res
 				postgresType = it.first.rawType,
 				value = it.second
 		) }
-		sql = "UPDATE ${statement.on.name} SET $sets"
+		sql = "UPDATE ${statement.on._name} SET $sets"
 	} else if (statement.type == StatementType.DELETE) {
-		sql = "DELETE FROM ${statement.on.name}"
+		sql = "DELETE FROM ${statement.on._name}"
 	} else {
 		throw IllegalStateException("Unknown SQL operation")
 	}
