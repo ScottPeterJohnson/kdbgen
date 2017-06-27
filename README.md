@@ -56,7 +56,9 @@ into(usersTable).insert { values { it
 } }.execute(connection)
 //If you omit either UID or email, the query will fail to typecheck.
 //Insert many users:
-into(usersTable).insert { values({ it.uid(("test").email("foo@bar"))}, { it.uid("test2").email("foo2@bar")}) }.execute(connection)
+val users = listOf("test", "test2", "test3")
+into(usersTable).insert { values(users.map { user -> { it : UsersTableInsertInit -> it.uid(user).email("$user@test.org") }}) }.execute(connection)
+//The explicit "UsersTableInsertInit" parameter is necessary due to Kotlin's limited type inference
 ```
 
 #### Select user
@@ -70,7 +72,7 @@ val (email) = from(usersTable).select(usersTable.email).where { name equalTo "Jo
 #### Update user
 ```kotlin
 //Support for returning from updates/inserts/deletes.
-val (uid) = from(usersTable).update { name setTo "Joe Smith" }.where { name equalTo "test" }.returning(uid).execute(connection).first()
+val (uid) = from(usersTable).update { it.name setTo "Joe Smith" }.where { it.name equalTo "test" }.returning(uid).execute(connection).first()
 ```
 
 ## Caveats

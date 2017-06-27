@@ -21,7 +21,7 @@ apply plugin: 'maven-publish'
 
 group 'net.justmachinery'
 description = "Utility to generate Kotlin classes to interface with a database"
-version = '0.3.0'
+version = '0.3.1'
 
 sourceCompatibility = 1.8
 

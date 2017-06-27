@@ -147,8 +147,9 @@ class Renderer(val settings : Settings, val userEnumTypes : List<String>) {
 
 		val notProvided = type.generatedProperties.map{ if(it.defaultable) "Provided" else "NotProvided"}.joinToString(",")
 		val provided = type.generatedProperties.map{"Provided"}.joinToString(",")
-		writer.append("fun InsertInit<$tableClassName>.values(vals : ($insertClassName<$notProvided>)->$insertClassName<$provided>) : List<ColumnsToValues<$tableClassName>> { return this.values(*arrayOf(vals)) }\n")
-		writer.append("fun InsertInit<$tableClassName>.values(vararg vals : ($insertClassName<$notProvided>)->$insertClassName<$provided>) : List<ColumnsToValues<$tableClassName>> {\n")
+		writer.append("typealias ${insertClassName}Init = $insertClassName<$notProvided>\n")
+		writer.append("fun InsertInit<$tableClassName>.values(vals : ($insertClassName<$notProvided>)->$insertClassName<$provided>) : List<ColumnsToValues<$tableClassName>> { return this.values(listOf(vals)) }\n")
+		writer.append("fun InsertInit<$tableClassName>.values(vals : List<($insertClassName<$notProvided>)->$insertClassName<$provided>>) : List<ColumnsToValues<$tableClassName>> {\n")
 		writer.append("\treturn vals.map {\n")
 		writer.append("\t\tval insert = it($insertClassName())\n")
 		writer.append("\t\tinsert.toCols()\n")
