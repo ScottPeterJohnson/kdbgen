@@ -17,8 +17,9 @@ class BasicOperationsTest : DatabaseTest() {
 			val (deletedEmailAddress) = from(usersTable).delete().returning(usersTable.emailAddress).execute(connection).first()
 			deletedEmailAddress shouldBe null
 			from(usersTable).selectAll().execute(connection) should beEmpty()
-			val users = listOf("Bob", "Joe", "Frank")
+			val users = listOf("Bob", "Frank", "Joe")
 			into(usersTable).insert { values(users.map { user -> { it : UsersTableInsertInit -> it.userName(user) } }) }.execute(connection)
+			from(usersTable).select(usersTable.userName).where { it.userName within users }.execute(connection).map { it.first } shouldBe users
 		}
 	}
 }

@@ -7,14 +7,20 @@ fun <S : Statement<*, T, *>, T : Table<*>>
 }
 
 interface WhereInit<Table>{
-	private fun <Value> TableColumn<Table, Value>.clause(op : String, value : Value){
-		(this@WhereInit as StatementImpl<*,*,*>).addWhereClause("${this.name} $op ${this.asParameter()}", this.rawType, value as Any?)
+	private fun impl() = (this as StatementImpl<*,*,*>)
+	private fun <Value> TableColumn<Table,Value>.columnClause(clause : String, values: Value){
+		impl().addWhereClause(clause, this.rawType, values)
+	}
+	private fun <Value> TableColumn<Table, Value>.opClause(op : String, value : Value){
+		this.columnClause("${this.name} $op ${this.asParameter()}", value)
 	}
 
-	infix fun <Value> TableColumn<Table, Value>.equalTo(value : Value) = clause("=", value)
-	infix fun <Value> TableColumn<Table, Value>.notEqualTo(value : Value) = clause("!=", value)
-	infix fun <Value> TableColumn<Table, Value>.greaterThan(value : Value) = clause(">", value)
-	infix fun <Value> TableColumn<Table, Value>.greaterThanOrEqualTo(value : Value) = clause(">=", value)
-	infix fun <Value> TableColumn<Table, Value>.lessThan(value : Value) = clause("<", value)
-	infix fun <Value> TableColumn<Table, Value>.lessThanOrEqualTo(value : Value) = clause("<=", value)
+	infix fun <Value> TableColumn<Table, Value>.equalTo(value : Value) = opClause("=", value)
+	infix fun <Value> TableColumn<Table, Value>.notEqualTo(value : Value) = opClause("!=", value)
+	infix fun <Value> TableColumn<Table, Value>.greaterThan(value : Value) = opClause(">", value)
+	infix fun <Value> TableColumn<Table, Value>.greaterThanOrEqualTo(value : Value) = opClause(">=", value)
+	infix fun <Value> TableColumn<Table, Value>.lessThan(value : Value) = opClause("<", value)
+	infix fun <Value> TableColumn<Table, Value>.lessThanOrEqualTo(value : Value) = opClause("<=", value)
+	infix fun <Value> TableColumn<Table, Value>.within(values : List<Value>) = impl().addWhereClause("${this.name} = ANY(?)", this.rawType.plus("[]"), values)
+
 }
