@@ -1,5 +1,5 @@
 buildscript {
-    ext.kotlin_version = '1.2.51'
+    ext.kotlin_version = '1.2.61'
 
     repositories {
         mavenCentral()
@@ -21,7 +21,7 @@ apply plugin: 'maven-publish'
 
 group 'net.justmachinery'
 description = "Utility to generate Kotlin classes to interface with a database"
-version = '0.3.4'
+version = '0.4.0'
 
 sourceCompatibility = 1.8
 
@@ -45,7 +45,7 @@ repositories {
 }
 
 dependencies {
-    compile "org.jetbrains.kotlin:kotlin-stdlib-jre8:$kotlin_version"
+    compile "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
     compile 'org.reflections:reflections:0.9.10'
     compile "org.postgresql:postgresql:9.4.1212"
     compile "org.jetbrains.kotlin:kotlin-reflect:$kotlin_version"
