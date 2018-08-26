@@ -1,4 +1,4 @@
-package io.jscry
+package net.justmachinery.kdbgen
 
 import io.kotlintest.Spec
 import io.kotlintest.TestCase

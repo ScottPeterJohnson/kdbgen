@@ -1,6 +1,5 @@
 package net.justmachinery.kdbgen
 
-import io.jscry.DatabaseTest
 import io.kotlintest.matchers.beEmpty
 import io.kotlintest.matchers.should
 import io.kotlintest.matchers.shouldBe

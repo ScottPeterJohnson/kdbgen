@@ -11,29 +11,39 @@ import java.sql.DriverManager
 import java.sql.Timestamp
 import java.util.*
 
-val kdbGen = "net.justmachinery.kdbgen"
+const val kdbGen = "net.justmachinery.kdbgen"
 
-val defaultOutputDirectory = "build/generated-sources/kotlin"
-val defaultEnumPackage = "net.justmachinery.kdbgen.enums"
-val defaultTablePackage = "net.justmachinery.kdbgen.tables"
+const val defaultOutputDirectory = "build/generated-sources/kotlin"
+const val defaultEnumPackage = "net.justmachinery.kdbgen.enums"
+const val defaultDataPackage = "net.justmachinery.kdbgen.tables"
 
-class Settings(parser : ArgParser){
+class Settings(parser: ArgParser) {
 	val databaseUrl by parser.storing("URL of database to connect to (including user/pass)")
-	val outputDirectory by parser.storing("Directory to output generated source files to").default(defaultOutputDirectory)
+	private val outputDirectory by parser.storing("Directory to output generated source files to").default(
+			defaultOutputDirectory)
+	private val dslOutputDirectory by parser.storing("Directory to output DSL helpers to, if different than output directory").default(
+			null)
+	val primitiveOnly by parser.flagging("Outputs types only as Kotlin primitives (no Timestamp/UUID types)")
 	val enumPackage by parser.storing("Package to output enum classes to").default(defaultEnumPackage)
-	val tablePackage by parser.storing("Package to output beans to").default(defaultTablePackage)
-	fun enumDirectory() : String = Paths.get(outputDirectory, enumPackage.replace(".", "/")).toString()
-	fun tableDirectory() : String = Paths.get(outputDirectory, tablePackage.replace(".", "/")).toString()
+	val dataPackage by parser.storing("Package to output beans and DSL to").default(defaultDataPackage)
+
+	private fun directory(directory: String, `package`: String) = Paths.get(directory,
+			`package`.replace(".", "/")).toString()
+
+	fun enumDirectory(): String = directory(outputDirectory, enumPackage)
+	fun dataDirectory(): String = directory(outputDirectory, dataPackage)
+	fun dslDirectory(): String = directory(dslOutputDirectory ?: outputDirectory, dataPackage)
 }
 
-fun main(args : Array<String>){
+fun main(args: Array<String>) {
 	val settings = Settings(ArgParser(args))
 	run(settings)
 }
 
-fun run(settings : Settings){
+fun run(settings: Settings) {
 	File(settings.enumDirectory()).deleteRecursively()
-	File(settings.tableDirectory()).deleteRecursively()
+	File(settings.dataDirectory()).deleteRecursively()
+	File(settings.dslDirectory()).deleteRecursively()
 
 	val connection = DriverManager.getConnection(settings.databaseUrl, Properties()) as PgConnection
 
@@ -44,16 +54,16 @@ fun run(settings : Settings){
 	generateTableTypes(settings, connection, userEnumTypes)
 }
 
-fun generateEnumTypes(settings : Settings, connection : PgConnection) : List<String> {
+fun generateEnumTypes(settings: Settings, connection: PgConnection): List<String> {
 	val userEnumTypes = mutableListOf<String>()
-	val userTypesResultSet = connection.prepareStatement("SELECT oid, typname FROM pg_type "+"WHERE typcategory = 'E'").executeQuery()
-	while(userTypesResultSet.next()){
+	val userTypesResultSet = connection.prepareStatement("SELECT oid, typname FROM pg_type " + "WHERE typcategory = 'E'").executeQuery()
+	while (userTypesResultSet.next()) {
 		val rawName = userTypesResultSet.getString("typname")
 		val name = underscoreToCamelCaseTypeName(rawName)
 		val id = userTypesResultSet.getInt("oid")
 		val values = mutableListOf<String>()
 		val valuesRs = connection.prepareStatement("SELECT * FROM pg_enum WHERE enumtypid = $id order by enumsortorder asc").executeQuery()
-		while(valuesRs.next()){
+		while (valuesRs.next()) {
 			values.add(valuesRs.getString("enumlabel"))
 		}
 		val output = File("${settings.enumDirectory()}/$name.kt")
@@ -65,15 +75,15 @@ fun generateEnumTypes(settings : Settings, connection : PgConnection) : List<Str
 	return userEnumTypes
 }
 
-fun generateTableTypes(settings : Settings, connection : PgConnection, userEnumTypes : List<String>){
+fun generateTableTypes(settings: Settings, connection: PgConnection, userEnumTypes: List<String>) {
 	val tablesResultSet = connection.metaData.getTables(null, null, "", arrayOf("TABLE"))
 	val types = mutableListOf<GeneratedType>()
-	while(tablesResultSet.next()){
+	while (tablesResultSet.next()) {
 		val rawTableName = tablesResultSet.getString("table_name")
 		val properties = mutableListOf<GeneratedProperty>()
 
 		val columnsResultSet = connection.metaData.getColumns(null, null, rawTableName, null)
-		while(columnsResultSet.next()){
+		while (columnsResultSet.next()) {
 			val rawName = columnsResultSet.getString("column_name")
 			val postgresTypeName = columnsResultSet.getString("type_name")
 			val nullable = columnsResultSet.getString("is_nullable") != "NO"
@@ -87,117 +97,145 @@ fun generateTableTypes(settings : Settings, connection : PgConnection, userEnumT
 		types.add(GeneratedType(rawName = rawTableName, generatedProperties = properties))
 	}
 	val renderer = Renderer(settings, userEnumTypes)
-	for(type in types){
+	for (type in types) {
 		renderer.renderType(type)
 	}
 }
 
-data class GeneratedType(val rawName : String, val generatedProperties: List<GeneratedProperty>) {
-	val className = underscoreToCamelCaseTypeName(rawName)
-	val memberName = underscoreToCamelCaseMemberName(rawName)
-}
-data class GeneratedProperty(val rawName : String, val postgresType : String, val nullable : Boolean, val defaultable : Boolean){
+data class GeneratedType(val rawName: String, val generatedProperties: List<GeneratedProperty>) {
 	val className = underscoreToCamelCaseTypeName(rawName)
 	val memberName = underscoreToCamelCaseMemberName(rawName)
 }
 
-fun String.onlyWhen(condition : Boolean) : String {
-	return if(condition){ this } else { "" }
+data class GeneratedProperty(val rawName: String,
+                             val postgresType: String,
+                             val nullable: Boolean,
+                             val defaultable: Boolean) {
+	val className = underscoreToCamelCaseTypeName(rawName)
+	val memberName = underscoreToCamelCaseMemberName(rawName)
 }
 
-class Renderer(val settings : Settings, val userEnumTypes : List<String>) {
+fun String.onlyWhen(condition: Boolean): String {
+	return if (condition) {
+		this
+	} else {
+		""
+	}
+}
+
+class Renderer(private val settings: Settings, private val userEnumTypes: List<String>) {
 	private val GeneratedProperty.kotlinType
 		get() = mapPostgresType(this.postgresType).plus("?".onlyWhen(this.nullable))
 
-	fun renderType(type: GeneratedType) {
-		val kotlinPath = "${settings.tableDirectory()}/${type.className}.kt"
-		File(kotlinPath).let {
+	private fun getOutputStream(directory: String, type: GeneratedType): OutputStreamWriter {
+		val fullPath = "$directory/${type.className}.kt"
+		File(fullPath).let {
 			it.parentFile.mkdirs()
 			it.createNewFile()
 		}
-		val writer = OutputStreamWriter(FileOutputStream(kotlinPath))
-		writer.append("package ${settings.tablePackage}\n")
-		renderImports(writer)
+		return OutputStreamWriter(FileOutputStream(fullPath))
+	}
 
-		renderRowClass(type, writer)
+	fun renderType(type: GeneratedType) {
+		val dslWriter = getOutputStream(settings.dslDirectory(), type)
+
+		dslWriter.append("@file:Suppress(\"UNCHECKED_CAST\", \"unused\", \"PropertyName\", \"SimplifiableCallChain\")\n")
+		dslWriter.append("package ${settings.dataPackage}\n")
+		renderImports(dslWriter)
+
+		renderRowClass(settings, type, dslWriter)
 
 		val tableClassName = "${type.className}Table"
-		writer.append("class $tableClassName : Table<${type.className}Row> {\n")
-			writer.append("\toverride val _name = \"${type.rawName}\"\n")
-			renderColumnDefinitions(type, writer)
-		writer.append("}\n")
-		writer.append("val ${type.memberName}Table = ${type.className}Table()\n")
+		dslWriter.append("class $tableClassName : Table<${type.className}Row> {\n")
+		dslWriter.append("\toverride val _name = \"${type.rawName}\"\n")
+		renderColumnDefinitions(type, dslWriter)
+		dslWriter.append("}\n")
+		dslWriter.append("val ${type.memberName}Table = ${type.className}Table()\n")
 
 		//Insert DSL support
 		val insertClassName = "${type.className}TableInsert"
-		writer.append("data class $insertClassName<${type.generatedProperties.map{it.className}.joinToString(", ")}>(\n")
-		writer.append(type.generatedProperties.map {
+		dslWriter.append("data class $insertClassName<${type.generatedProperties.map { it.className }.joinToString(", ")}>(\n")
+		dslWriter.append(type.generatedProperties.map {
 			"\tval _${it.memberName} : NullHolder<${it.kotlinType}>? = null"
 		}.joinToString(",\n"))
-		writer.append("\n)\n")
-		writer.append("{\n")
-			writer.append("fun toCols() : List<Pair<TableColumn<$tableClassName, Any?>,Any?>> {\n")
-				writer.append("\treturn listOf(\n")
-					writer.append(type.generatedProperties.map{
-					"\t\t_${it.memberName}?.let { Pair(${type.memberName}Table.${it.memberName} as TableColumn<$tableClassName,Any?>, it.value as Any?) }"
-					}.joinToString(",\n"))
-				writer.append("\t).filterNotNull()\n")
-			writer.append("}\n")
-		writer.append("}\n")
+		dslWriter.append("\n)\n")
+		dslWriter.append("{\n")
+		dslWriter.append("internal fun toCols() : List<Pair<TableColumn<$tableClassName, Any?>,Any?>> {\n")
+		dslWriter.append("\treturn listOf(\n")
+		dslWriter.append(type.generatedProperties.map {
+			"\t\t_${it.memberName}?.let { Pair(${type.memberName}Table.${it.memberName} as TableColumn<$tableClassName,Any?>, it.value as Any?) }"
+		}.joinToString(",\n"))
+		dslWriter.append("\t).filterNotNull()\n")
+		dslWriter.append("}\n")
+		dslWriter.append("}\n")
 
-		val notProvided = type.generatedProperties.map{ if(it.defaultable) "Provided" else "NotProvided"}.joinToString(",")
-		val provided = type.generatedProperties.map{"Provided"}.joinToString(",")
-		writer.append("typealias ${insertClassName}Init = $insertClassName<$notProvided>\n")
-		writer.append("fun InsertInit<$tableClassName>.values(vals : ($insertClassName<$notProvided>)->$insertClassName<$provided>) : List<ColumnsToValues<$tableClassName>> { return this.values(listOf(vals)) }\n")
-		writer.append("fun InsertInit<$tableClassName>.values(vals : List<($insertClassName<$notProvided>)->$insertClassName<$provided>>) : List<ColumnsToValues<$tableClassName>> {\n")
-		writer.append("\treturn vals.map {\n")
-		writer.append("\t\tval insert = it($insertClassName())\n")
-		writer.append("\t\tinsert.toCols()\n")
-		writer.append("\t}")
-		writer.append("}\n")
+		val notProvided = type.generatedProperties.map { if (it.defaultable) "Provided" else "NotProvided" }.joinToString(
+				",")
+		val provided = type.generatedProperties.map { "Provided" }.joinToString(",")
+		dslWriter.append("typealias ${insertClassName}Init = $insertClassName<$notProvided>\n")
+		dslWriter.append("fun InsertInit<$tableClassName>.values(vals : ($insertClassName<$notProvided>)->$insertClassName<$provided>) : List<ColumnsToValues<$tableClassName>> { return this.values(listOf(vals)) }\n")
+		dslWriter.append("fun InsertInit<$tableClassName>.values(vals : List<($insertClassName<$notProvided>)->$insertClassName<$provided>>) : List<ColumnsToValues<$tableClassName>> {\n")
+		dslWriter.append("\treturn vals.map {\n")
+		dslWriter.append("\t\tval insert = it($insertClassName())\n")
+		dslWriter.append("\t\tinsert.toCols()\n")
+		dslWriter.append("\t}")
+		dslWriter.append("}\n")
 
 
 		type.generatedProperties.forEachIndexed { index, it ->
 			val parameters = (0..(type.generatedProperties.size - 2)).map { "P$it" }
-			val parameterization = { type : String ->
+			val parameterization = { type: String ->
 				val list = parameters.toMutableList()
 				list.add(index, type)
 				list.joinToString(",")
 			}
-			val inputType = "$insertClassName<${parameterization(if(it.defaultable) "*" else "NotProvided")}>"
+			val inputType = "$insertClassName<${parameterization(if (it.defaultable) "*" else "NotProvided")}>"
 			val resultType = "$insertClassName<${parameterization("Provided")}>"
-			val paramStr = if(parameters.isNotEmpty()) "<${parameters.joinToString(",")}>" else ""
-			writer.append("fun $paramStr $inputType.${it.memberName}(${it.memberName} : ${it.kotlinType}) : $resultType = this.copy(_${it.memberName} = NullHolder(${it.memberName})) as $resultType\n")
+			val paramStr = if (parameters.isNotEmpty()) "<${parameters.joinToString(",")}>" else ""
+			dslWriter.append("fun $paramStr $inputType.${it.memberName}(${it.memberName} : ${it.kotlinType}) : $resultType = this.copy(_${it.memberName} = NullHolder(${it.memberName})) as $resultType\n")
 		}
-		writer.close()
+		dslWriter.close()
 	}
 
-	fun renderRowClass(type: GeneratedType, writer : OutputStreamWriter){
-		writer.append("data class ${type.className}Row(")
-		writer.append(type.generatedProperties.map({
-			"val ${it.memberName} : ${it.kotlinType}${"?".onlyWhen(it.nullable)}"
-		}).joinToString(", "))
-		writer.append(") : SqlResult\n")
+	private fun renderRowClass(settings: Settings, type: GeneratedType, writer: OutputStreamWriter) {
+		fun writeTemplate(actualWriter: OutputStreamWriter) {
+			actualWriter.append("data class ${type.className}Row(")
+			actualWriter.append(type.generatedProperties.map({
+				"val ${it.memberName} : ${it.kotlinType}"
+			}).joinToString(", "))
+			actualWriter.append(")\n")
+		}
+
+		if (settings.dslDirectory() != settings.dataDirectory()) {
+			val dataclassWriter = getOutputStream(settings.dataDirectory(), type)
+			dataclassWriter.append("package ${settings.dataPackage}\n")
+			writeTemplate(dataclassWriter)
+			dataclassWriter.close()
+		} else {
+			writeTemplate(writer)
+		}
 	}
 
-	fun renderImports(writer: OutputStreamWriter) {
+	private fun renderImports(writer: OutputStreamWriter) {
 		writer.append("import $kdbGen.*\n")
-		writer.append("import javax.annotation.CheckReturnValue\n")
-		writer.append("import java.sql.ResultSet\n")
 	}
 
-	fun renderColumnDefinitions(type: GeneratedType, writer: OutputStreamWriter) {
+	private fun renderColumnDefinitions(type: GeneratedType, writer: OutputStreamWriter) {
 		type.generatedProperties.forEach {
-			writer.append("\tval ${it.memberName} = TableColumn<${type.className}Table, ${it.kotlinType}>(\"${it.rawName}\", \"${it.postgresType}\", ${userEnumTypes.contains(it.postgresType)})\n")
+			writer.append("\tval ${it.memberName} = TableColumn<${type.className}Table, ${it.kotlinType}>(\"${it.rawName}\", \"${it.postgresType}\", ${userEnumTypes.contains(
+					it.postgresType)})\n")
 		}
 	}
 
 	fun castAsNecessary(value: String, type: String): String {
-		if (listOf("inet", "jsonb").contains(type) || userEnumTypes.contains(type)){ return "CAST ($value AS $type)"}
-		else { return value }
+		if (listOf("inet", "jsonb").contains(type) || userEnumTypes.contains(type)) {
+			return "CAST ($value AS $type)"
+		} else {
+			return value
+		}
 	}
 
-	fun mapPostgresType(postgresType: String): String {
+	private fun mapPostgresType(postgresType: String): String {
 		val defaultType = when (postgresType) {
 			"bigint" -> Long::class
 			"int8" -> Long::class
@@ -211,8 +249,8 @@ class Renderer(val settings : Settings, val userEnumTypes : List<String>) {
 			"json" -> Json::class
 			"jsonb" -> Json::class
 			"text" -> String::class
-			"timestamp" -> Timestamp::class
-			"uuid" -> UUID::class
+			"timestamp" -> if (settings.primitiveOnly) String::class else Timestamp::class
+			"uuid" -> if (settings.primitiveOnly) String::class else UUID::class
 			else -> null
 		}
 		if (defaultType != null) {
@@ -221,7 +259,7 @@ class Renderer(val settings : Settings, val userEnumTypes : List<String>) {
 		if (userEnumTypes.contains(postgresType)) {
 			return "${settings.enumPackage}.${underscoreToCamelCaseTypeName(postgresType)}"
 		}
-		if(postgresType.startsWith("_")){
+		if (postgresType.startsWith("_")) {
 			val arrayType = mapPostgresType(postgresType.substring(startIndex = 1))
 			return "kotlin.collections.List<$arrayType>"
 		}
@@ -229,12 +267,13 @@ class Renderer(val settings : Settings, val userEnumTypes : List<String>) {
 	}
 
 }
+
 //Format is TypeName
-private fun underscoreToCamelCaseTypeName(name : String) : String {
+private fun underscoreToCamelCaseTypeName(name: String): String {
 	return name.split("_").map(String::capitalize).joinToString("")
 }
 
 //Format is memberName
-private fun underscoreToCamelCaseMemberName(name : String) : String {
-	return name.split("_").mapIndexed({ index, it -> if(index>0) it.capitalize() else it } ).joinToString("")
+private fun underscoreToCamelCaseMemberName(name: String): String {
+	return name.split("_").mapIndexed({ index, it -> if (index > 0) it.capitalize() else it }).joinToString("")
 }

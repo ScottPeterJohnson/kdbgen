@@ -3,8 +3,7 @@ package net.justmachinery.kdbgen
 /**
  * Result data tuples
  */
-interface SqlResult
-interface ResultTuple : SqlResult
+interface ResultTuple
 data class Result1<out V1>(val first : V1) : ResultTuple
 data class Result2<out V1, out V2>(val first : V1, val second : V2) : ResultTuple
 data class Result3<out V1, out V2, out V3>(val first : V1, val second : V2, val third : V3) : ResultTuple

@@ -41,6 +41,11 @@ You will need to replace:
 - Optional: `build/generated-sources/kotlin` with wherever your generated sources go
 - `<VERSION>` with the latest version of this repository
 
+### Multiplatform Kotlin
+To use this in a multiplatform Kotlin project (JS + JVM + Shared code), kdbgen should be a dependency of the JVM project, 
+the `--primitiveOnly` flag should be enabled, the `--outputDirectory` should point to the shared project's generated sources,
+and `--dslDirectory` should be set to the JVM project's generated sources. 
+
 ### Basic example
 
  Assume a basic users table with mandatory "uid", "email", and optional "name" fields. You can then do the following:

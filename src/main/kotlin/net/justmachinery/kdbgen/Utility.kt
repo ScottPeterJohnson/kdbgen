@@ -3,6 +3,8 @@ package net.justmachinery.kdbgen
 import org.postgresql.jdbc.PgArray
 import org.postgresql.util.PGobject
 import java.sql.ResultSet
+import java.sql.Timestamp
+import java.util.*
 import java.util.concurrent.TimeUnit
 import kotlin.reflect.KClass
 import kotlin.reflect.KParameter
@@ -12,7 +14,11 @@ import kotlin.reflect.jvm.jvmErasure
 
 typealias Json = String
 
-fun <Data : SqlResult> resultMapper(dataClass: KClass<Data>): (ResultSet) -> Data {
+/**
+ * Attempt to construct a data class instance from a result set, mapping parameters based on propertyCase -> property_case
+ * Some type casting may be done as necessary.
+ */
+fun <Data : Any> resultMapper(dataClass: KClass<Data>): (ResultSet) -> Data {
 	val constructor = dataClass.primaryConstructor!!
 	val parameters = constructor.parameters.map { Pair(it, underscore(it.name!!)) }
 
@@ -51,12 +57,18 @@ private fun convertFromResultSet(value : Any?, type : KType) : Any?  {
 		val typeClass = type.jvmErasure.java
 		result = reflectionCreateEnum(typeClass, result)
 	}
+	if(result is Timestamp && type.isSubtypeOf(Long::class.starProjectedType)){
+		result = result.time
+	}
+	if(result is UUID && type.isSubtypeOf(String::class.starProjectedType)){
+		result = result.toString()
+	}
 	return result
 }
 
 fun underscore(name: String): String {
 	return name.mapIndexed { index, char ->
-		if (index != 0 && char.isUpperCase()) "_" + char else char.toString()
+		if (index != 0 && char.isUpperCase()) "_$char" else char.toString()
 	}.joinToString("")
 }
 

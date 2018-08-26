@@ -118,7 +118,7 @@ fun <Op : SqlOp, On : OnTarget> Statement<Op,On,NotProvided>.execute(connection 
 	statement.execute()
 }
 
-inline fun <Op : SqlOp, On : OnTarget, reified Result : SqlResult> Statement<Op,On,Result>.execute(connection : Connection) : List<Result> {
+inline fun <Op : SqlOp, On : OnTarget, reified Result : Any> Statement<Op,On,Result>.execute(connection : Connection) : List<Result> {
 	val (sql, parameters) = render(this, connection)
 	val statement = connection.prepareStatement(sql)
 	for((index, parameter) in parameters.withIndex()){

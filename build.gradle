@@ -1,5 +1,5 @@
 buildscript {
-    ext.kotlin_version = '1.1.2'
+    ext.kotlin_version = '1.2.30'
 
     repositories {
         mavenCentral()
@@ -21,7 +21,7 @@ apply plugin: 'maven-publish'
 
 group 'net.justmachinery'
 description = "Utility to generate Kotlin classes to interface with a database"
-version = '0.3.3'
+version = '0.3.4'
 
 sourceCompatibility = 1.8
 
@@ -34,7 +34,7 @@ task generatePostgresInterface(type : JavaExec){
     main = "net.justmachinery.kdbgen.GeneratePostgresInterfaceKt"
     args '--databaseUrl=jdbc:postgresql://localhost:5432/kdbgentest?user=kdbgentest&password=kdbgentest'
     args '--enumPackage=net.justmachinery.kdbgen.test.generated.enums'
-    args '--tablePackage=net.justmachinery.kdbgen.test.generated.tables'
+    args '--dataPackage=net.justmachinery.kdbgen.test.generated.tables'
 }
 compileTestKotlin.dependsOn('generatePostgresInterface')
 
