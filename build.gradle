@@ -10,7 +10,7 @@ buildscript {
 }
 
 plugins {
-    id 'com.jfrog.bintray' version '1.7.3'
+    id 'com.jfrog.bintray' version '1.8.4'
 }
 
 apply plugin: 'java'
@@ -21,7 +21,7 @@ apply plugin: 'maven-publish'
 
 group 'net.justmachinery'
 description = "Utility to generate Kotlin classes to interface with a database"
-version = '0.4.0'
+version = '0.3.6'
 
 sourceCompatibility = 1.8
 
