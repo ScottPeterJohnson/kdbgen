@@ -23,7 +23,7 @@ class Settings(parser: ArgParser) {
 			defaultOutputDirectory)
 	private val dslOutputDirectory by parser.storing("Directory to output DSL helpers to, if different than output directory").default(
 			null)
-	val primitiveOnly by parser.flagging("Outputs types only as Kotlin primitives (no Timestamp/UUID types)")
+	val primitiveOnly by parser.flagging("Outputs types only as Kotlin primitives. Timestamps will be represented as Longs (losing precision below the millisecond level), and UUIDs as strings.")
 	val enumPackage by parser.storing("Package to output enum classes to").default(defaultEnumPackage)
 	val dataPackage by parser.storing("Package to output beans and DSL to").default(defaultDataPackage)
 
@@ -200,9 +200,9 @@ class Renderer(private val settings: Settings, private val userEnumTypes: List<S
 	private fun renderRowClass(settings: Settings, type: GeneratedType, writer: OutputStreamWriter) {
 		fun writeTemplate(actualWriter: OutputStreamWriter) {
 			actualWriter.append("data class ${type.className}Row(")
-			actualWriter.append(type.generatedProperties.map({
+			actualWriter.append(type.generatedProperties.map {
 				"val ${it.memberName} : ${it.kotlinType}"
-			}).joinToString(", "))
+			}.joinToString(", "))
 			actualWriter.append(")\n")
 		}
 
@@ -249,7 +249,7 @@ class Renderer(private val settings: Settings, private val userEnumTypes: List<S
 			"json" -> Json::class
 			"jsonb" -> Json::class
 			"text" -> String::class
-			"timestamp" -> if (settings.primitiveOnly) String::class else Timestamp::class
+			"timestamp" -> if (settings.primitiveOnly) Long::class else Timestamp::class
 			"uuid" -> if (settings.primitiveOnly) String::class else UUID::class
 			else -> null
 		}
