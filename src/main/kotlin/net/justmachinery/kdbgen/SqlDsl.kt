@@ -20,9 +20,18 @@ interface OnTarget { val _name: String }
 interface Table<DataRow> : OnTarget
 //Represents a column in table that maps to Kotlin Type
 class TableColumn<Table, Type>(val name : String, val rawType : String, val postgresEnum : Boolean){
-	fun asParameter() : String {
-		if (listOf("inet", "jsonb").contains(rawType) || postgresEnum){ return "CAST (? AS $rawType)"}
-		else { return "?" }
+	fun asParameter(value : Any?) : String {
+		return if (
+				listOf("inet", "jsonb").contains(rawType)
+				|| postgresEnum
+				|| (rawType == "timestamp" && value is Long)
+				|| (rawType == "uuid" && value is String)
+			){
+			"CAST (? AS $rawType)"
+		}
+		else {
+			"?"
+		}
 	}
 }
 
@@ -75,7 +84,7 @@ fun <Op : SqlOp, On : OnTarget, Result> render(statement : Statement<Op, On, Res
 		sql += " FROM ${statement.on._name}"
 	} else if (statement.type == StatementType.INSERT) {
 		val columns = statement.insertValues.first().map { it.first.name }.joinToString(", ")
-		val values = statement.insertValues.map { "(" + it.map { it.first.asParameter() }.joinToString(", ") + ")" }
+		val values = statement.insertValues.map { "(" + it.map { it.first.asParameter(it.second) }.joinToString(", ") + ")" }
 		parameters += statement.insertValues.flatMap { it.map { Parameter(
 				postgresType = it.first.rawType,
 				value = it.second
@@ -83,7 +92,7 @@ fun <Op : SqlOp, On : OnTarget, Result> render(statement : Statement<Op, On, Res
 		sql = "INSERT INTO ${statement.on._name}($columns) VALUES ${values.joinToString(",")}"
 	} else if (statement.type == StatementType.UPDATE) {
 		if(statement.updateValues.isEmpty()){ throw IllegalStateException("No update provided for UPDATE statement: $statement") }
-		val sets = statement.updateValues.map { it.first.name + " = " + it.first.asParameter()}.joinToString(", ")
+		val sets = statement.updateValues.map { it.first.name + " = " + it.first.asParameter(it.second)}.joinToString(", ")
 		parameters += statement.updateValues.map { Parameter(
 				postgresType = it.first.rawType,
 				value = it.second

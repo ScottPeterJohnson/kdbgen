@@ -12,7 +12,7 @@ interface WhereInit<Table>{
 		impl().addWhereClause(clause, this.rawType, values)
 	}
 	private fun <Value> TableColumn<Table, Value>.opClause(op : String, value : Value){
-		this.columnClause("${this.name} $op ${this.asParameter()}", value)
+		this.columnClause("${this.name} $op ${this.asParameter(value)}", value)
 	}
 
 	infix fun <Value> TableColumn<Table, Value>.equalTo(value : Value) = opClause("=", value)
