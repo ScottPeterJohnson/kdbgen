@@ -21,7 +21,7 @@ maven { url 'https://dl.bintray.com/scottpjohnson/generic/' }
 }
 task generatePostgresInterface(type : JavaExec){
    classpath = sourceSets.main.compileClasspath
-   main = "net.justmachinery.kdbgen.GeneratePostgresInterfaceKt"
+   main = "net.justmachinery.kdbgen.generation.GeneratePostgresInterfaceKt"
    args '--databaseUrl=jdbc:postgresql://localhost:5432/DATABASE?user=DATABASE_USER&password=DATABASE_PASSWORD'
    args '--enumPackage=some.company.database.enums'
    args '--tablePackage=some.company.database.tables'
@@ -48,43 +48,99 @@ and `--dslDirectory` should be set to the JVM project's generated sources.
 
 ### Basic example
 
- Assume a basic users table with mandatory "uid", "email", and optional "name" fields. You can then do the following:
+ Assume a basic users table with mandatory "uid", "email", and optional "name" fields.
+ 
+#### Setup
+```kotlin
+//Any method of getting a connection will suffice. Using basic JDBC:
+val connection = DriverManager.getConnection(DATABASE_URL, Properties()) as PgConnection
+//A basic wrapper for obtaining a connection, whether through threadpool or just reusing the same connection
+val connectionProvider = object : ConnectionProvider() {
+    override fun getConnection(): Connection {
+        return connection
+    }
+}
+//This will let us write nice DSL
+fun sql(cb : ConnectionProvider.()->Unit){
+    cb(connectionProvider)
+}
+```
 
 #### Insert user
 ```kotlin
-//Inserts use a chained method call style to ensure that you have provided every non-defaultable field
-//Since "name" is optional, we don't have to provide it here.
-into(usersTable).insert { values { it
-    .uid("test")
-    .email("foo@bar")
-    //.name("John Foo")
-} }.execute(connection)
-//If you omit either UID or email, the query will fail to typecheck.
-//Insert many users:
-val users = listOf("test", "test2", "test3")
-into(usersTable).insert { values(users.map { user -> { it : UsersTableInsertInit -> it.uid(user).email("$user@test.org") }}) }.execute(connection)
-//The explicit "UsersTableInsertInit" parameter is necessary due to Kotlin's limited type inference
+sql { //Brings connection provider into scope
+    usersTable.run { //Brings the users table into scope
+        insert {
+            //Since "name" is optional, we don't have to provide it as an argument to this insert helper method.
+            values(uid = "test", email = "foo@bar")
+        }.execute()
+        
+        //Add multiple users:
+        val users = listOf("test", "test2", "test3")
+        insert {
+            for(user in users){
+                values(uid = user, email = "$user@test.org")
+            }
+        }.execute()
+    }  
+}
 ```
 
 #### Select user
 ```kotlin
-//Find the user with uid "test". This will return a convenience data class containing all columns.
-from(usersTable).selectAll().where { uid equalTo "test" }.execute(connection).firstOrNull()
-//Find the emails of all users named "John Smith". This will return just the email column wrapped in a tuple-like data structure.
-val (email) = from(usersTable).select(usersTable.email).where { name equalTo "John Smith" }.execute(connection).first()
+sql {
+    usersTable.run {
+        //Find the user with uid "test". This will return a convenience data class containing all columns.
+        select(`*`) {
+            where {
+                uid equalTo "test"
+            }
+        }.value()
+        
+        //Find the emails of all users named "John Smith". This will return just the email column.
+        val email = select(email) { 
+            where { name equalTo "John Smith" }
+        }.values()
+        
+        //Both email and user ID, wrapped in a tuple like structure.
+        val results = select(uid, email) { }.list()
+        results.map { it.first } //UID
+        results.map { it.second } //Email
+    }
+}
 ```
 
 #### Update user
 ```kotlin
-//Support for returning from updates/inserts/deletes.
-val (uid) = from(usersTable).update { it.name setTo "Joe Smith" }.where { it.name equalTo "test" }.returning(uid).execute(connection).first()
+sql {
+    usersTable.run {
+        //The "returning" variants of update/delete allow for returning values affected
+        updateReturning {
+            name setTo "Joe Smith"
+            where {
+                name equalTo "test"
+            }
+            returning(uid)
+        }.values()
+    }
+}
+```
+
+### Delete user
+```kotlin
+sql {
+    usersTable.run {
+        delete {
+            where {
+                name equalTo "test"
+            }
+        }
+    }
+}
 ```
 
 ## Caveats
 - Library syntax may change.
-
-## Array Types
-- These will convert to/from lists
 
 ## TODO
 - Queries on more than one table
