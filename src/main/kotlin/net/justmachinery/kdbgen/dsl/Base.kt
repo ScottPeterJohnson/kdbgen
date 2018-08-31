@@ -6,11 +6,13 @@ import java.sql.Connection
 import java.sql.PreparedStatement
 import kotlin.reflect.KType
 
-interface Table {
+interface Table<Columns> {
 	//This was given a property name that cannot appear as a SQL column name, since generated classes are expected to have
 	//arbitrarily named column properties
 	@Suppress("PropertyName")
 	val `table name`: String
+
+	fun columns() : Columns
 }
 
 class TableColumn<Type>(val name: String,
@@ -61,7 +63,7 @@ internal fun TableColumn<*>.asParameter(value: Any?): String {
 	}
 }
 
-private data class Parameter(val postgresType: String, val value: Any?)
+data class Parameter(val postgresType: String, val value: Any?)
 
 private fun convertParameter(param: Parameter, connection: Connection): Any? {
 	if (param.value is List<*>) {
@@ -83,10 +85,15 @@ private fun <Result : ResultTuple> renderStatement(statement : StatementReturnin
 	var sql: String
 	var parameters: List<Parameter> = emptyList()
 
+	val joins = builder.joinTables.joinToString(", "){ it.`table name` }
 
 	when(builder.operation()){
 		SqlOperation.SELECT -> {
 			sql = "SELECT ${selectsToParameters(selectValues).joinToString(", ")} FROM $tableName"
+			if(builder.joinTables.isNotEmpty()){
+				sql += ", "
+				sql += joins
+			}
 		}
 		SqlOperation.INSERT -> {
 			val columns = insertValues.first().joinToString(", ") { it.first.name }
@@ -110,18 +117,21 @@ private fun <Result : ResultTuple> renderStatement(statement : StatementReturnin
 				)
 			}
 			sql = "UPDATE $tableName SET $sets"
+			if(builder.joinTables.isNotEmpty()){
+				sql += " FROM $joins"
+			}
 		}
 		SqlOperation.DELETE -> {
 			sql = "DELETE FROM $tableName"
+			if(builder.joinTables.isNotEmpty()){
+				sql += " USING $joins"
+			}
 		}
 	}
 
 	if (builder.whereClauses.isNotEmpty()) {
 		sql += " WHERE " + builder.whereClauses.joinToString(" AND ") { it.sql }
-		parameters += builder.whereClauses.map {
-			Parameter(it.postgresType,
-					it.paramValue)
-		}
+		parameters += builder.whereClauses.flatMap { it.parameters }
 	}
 	if (builder.operation() !== SqlOperation.SELECT && selectValues.isNotEmpty()) {
 		sql += " RETURNING " + selectsToParameters(selectValues).joinToString(", ")

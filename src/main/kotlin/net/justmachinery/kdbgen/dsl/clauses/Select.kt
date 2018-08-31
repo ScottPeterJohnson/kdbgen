@@ -30,7 +30,7 @@ data class RawColumnSource<Value>(val name : String, val type : KType) : SelectS
 
 data class ReturnValues<V>(val values : List<*>)
 @Suppress("UNCHECKED_CAST")
-interface ReturningStatementBuilder : WhereStatementBuilder {
+interface ReturningStatementBuilder {
 	fun addReturningValue(source : SelectSource<*>)
 
 	private fun returningValues(vararg columns : SelectSource<*>): ReturnValues<*> {
@@ -45,3 +45,5 @@ interface ReturningStatementBuilder : WhereStatementBuilder {
 	fun <V1, V2, V3> returning(first: SelectSource<V1>, second: SelectSource<V2>, third : SelectSource<V3>): ReturnValues<Result3<V1, V2, V3>> = returningValues(first,second,third) as ReturnValues<Result3<V1, V2, V3>>
 	fun <V1, V2, V3, V4> returning(first: SelectSource<V1>, second: SelectSource<V2>, third : SelectSource<V3>, fourth : SelectSource<V4>): ReturnValues<Result4<V1, V2, V3, V4>> = returningValues(first,second,third,fourth) as ReturnValues<Result4<V1, V2, V3, V4>>
 }
+
+interface SelectStatementBuilder : ReturningStatementBuilder, WhereStatementBuilder

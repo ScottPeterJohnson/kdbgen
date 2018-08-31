@@ -5,16 +5,21 @@ import kotlin.reflect.KClass
 
 
 data class StatementBuilder (
-		val table : Table,
+		val table : Table<*>,
 		var parameterCount : Int = 0,
 		val selectValues : MutableList<SelectSource<*>> = mutableListOf(),
 		val updateValues: MutableList<Pair<TableColumn<*>, *>> = mutableListOf(),
 		val insertValues : MutableList<List<Pair<TableColumn<*>, *>>> = mutableListOf(),
 		val whereClauses : MutableList<WhereClause> = mutableListOf(),
+		val joinTables : MutableList<Table<*>> = mutableListOf(),
 		var isDelete : Boolean = false
-) : WhereStatementBuilder, UpdateStatementBuilder, ReturningStatementBuilder, InsertStatementBuilder, DeleteStatementBuilder {
-	override fun addWhereClause(sql : String, paramType : String, paramValue : Any?){
-		whereClauses += WhereClause(sql, paramType, paramValue)
+) : UpdateStatementBuilder, SelectStatementBuilder, InsertStatementBuilder, DeleteStatementBuilder {
+	override fun addJoinTable(table: Table<*>) {
+		joinTables.add(table)
+	}
+
+	override fun addWhereClause(sql : String, parameters : List<Parameter>){
+		whereClauses += WhereClause(sql, parameters)
 	}
 	override fun addUpdateValue(value : Pair<TableColumn<*>, *>){
 		updateValues.add(value)
@@ -48,7 +53,7 @@ data class StatementBuilder (
 	}
 }
 
-data class WhereClause(val sql : String, val postgresType : String, val paramValue : Any?)
+data class WhereClause(val sql : String, val parameters : List<Parameter>)
 
 internal enum class SqlOperation {
 	SELECT,
@@ -57,7 +62,7 @@ internal enum class SqlOperation {
 	DELETE
 }
 
-inline fun <Q : Table, reified Result : ResultTuple> Q.statement(cb : StatementBuilder.()->ReturnValues<Result>) : StatementReturning<Result> {
+inline fun <Q : Table<*>, reified Result : ResultTuple> Q.statement(cb : StatementBuilder.()->ReturnValues<Result>) : StatementReturning<Result> {
 	val builder = StatementBuilder(this)
 	cb(builder)
 	return StatementReturning(builder, Result::class)

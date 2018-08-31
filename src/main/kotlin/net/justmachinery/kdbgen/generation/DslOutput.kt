@@ -35,41 +35,45 @@ internal class DslRenderer(
 
 	fun render() {
 		val dslWriter = SourceWriter(getOutputStream(settings.dslDirectory()))
+		dslWriter.run {
+			line("@file:Suppress(\"UNCHECKED_CAST\", \"unused\", \"PropertyName\", \"SimplifiableCallChain\")")
+			line("package ${settings.dataPackage}")
+			renderImports(dslWriter)
 
-		dslWriter.line("@file:Suppress(\"UNCHECKED_CAST\", \"unused\", \"PropertyName\", \"SimplifiableCallChain\")")
-		dslWriter.line("package ${settings.dataPackage}")
-		renderImports(dslWriter)
-
-		renderRowClass(settings, dslWriter)
+			renderRowClass(settings, dslWriter)
 
 
-		dslWriter.line("class $tableClassName internal constructor() : Table {")
-		dslWriter.indent {
-			dslWriter.line("\toverride val `table name` = \"${type.rawName}\"")
-			renderColumnDefinitions(dslWriter)
+			line("class $tableClassName internal constructor() : Table<$tableClassName.Columns> {")
+			indent {
+				line("override val `table name` = \"${type.rawName}\"")
+				line("override fun columns() = Columns()")
+				renderColumnDefinitions(dslWriter)
 
-			renderSelectAll(dslWriter)
+				renderSelectAll(dslWriter)
 
-			renderInsertHelper(dslWriter)
+				renderInsertHelper(dslWriter)
 
-			renderUpdateHelper(dslWriter)
+				renderUpdateHelper(dslWriter)
 
-			renderDeleteHelper(dslWriter)
+				renderDeleteHelper(dslWriter)
 
+			}
+			line("}")
+
+			line("val ${type.memberName}Table = ${type.className}Table()")
+
+			writer.close()
 		}
-		dslWriter.line("}")
-
-		dslWriter.line("val ${type.memberName}Table = ${type.className}Table()")
-
-		dslWriter.writer.close()
 	}
 
 
 	private fun renderImports(writer: SourceWriter) {
-		writer.line("import $kdbGen.dsl.*")
-		writer.line("import $kdbGen.dsl.clauses.*")
-		writer.line("import kotlin.reflect.*")
-		writer.line("import kotlin.reflect.full.*")
+		writer.run {
+			line("import $kdbGen.dsl.*")
+			line("import $kdbGen.dsl.clauses.*")
+			line("import kotlin.reflect.*")
+			line("import kotlin.reflect.full.*")
+		}
 	}
 
 
@@ -95,70 +99,80 @@ internal class DslRenderer(
 	}
 
 	private fun renderColumnDefinitions(writer: SourceWriter) {
-		writer.line("open class Columns {")
-		writer.indent {
-			writer.line("private companion object {")
-			writer.indent {
-				type.postgresTableColumns.forEach {
-					writer.line("private val ${it.memberName} = TableColumn<${context.run { it.kotlinType }}>(\"${it.rawName}\", \"${it.postgresType}\", ${it.postgresType in context.postgresTypeToEnum}, ${context.run { it.kotlinKType }})")
-				}
-				writer.line("""
+		writer.run {
+			line("open class Columns {")
+			indent {
+				line("private companion object {")
+				indent {
+					type.postgresTableColumns.forEach {
+						line("private val ${it.memberName} = TableColumn<${context.run { it.kotlinType }}>(\"${it.rawName}\", \"${it.postgresType}\", ${it.postgresType in context.postgresTypeToEnum}, ${context.run { it.kotlinKType }})")
+					}
+					line("""
 					private val `*` = DataClassSource(
 						listOf(${type.postgresTableColumns.joinToString(", ") { it.memberName + ".selectSource" }})
 					) {
 						$rowName(${
-						type.postgresTableColumns.mapIndexed { index, it ->
-							"it[$index] as " + context.run { it.kotlinType }
-						}.joinToString(", ")
-						})
+					type.postgresTableColumns.mapIndexed { index, it ->
+						"it[$index] as " + context.run { it.kotlinType }
+					}.joinToString(", ")
+					})
 					}
 				""".trimIndent())
-			}
-			writer.line("}")
-			type.postgresTableColumns.forEach {
-				writer.line("val ${it.memberName} get() = Columns.${it.memberName}")
-			}
-			writer.line("val `*` get() = Columns.`*`")
+				}
+				line("}")
+				type.postgresTableColumns.forEach {
+					line("val ${it.memberName} get() = Columns.${it.memberName}")
+				}
+				line("val `*` get() = Columns.`*`")
 
+			}
+			line("}")
 		}
-		writer.line("}")
 	}
 
 	private fun renderSelectAll(dslWriter: SourceWriter) {
 		dslWriter.line("inline fun <reified Result : ResultTuple> select(cb : SelectDsl.()->ReturnValues<Result>) = statement { cb(SelectDsl(this)) }")
-		dslWriter.line("class SelectDsl(val builder : StatementBuilder) : Columns(), ReturningStatementBuilder by builder")
+		dslWriter.line("class SelectDsl(val builder : StatementBuilder) : Columns(), SelectStatementBuilder by builder")
 	}
 
 	//Safe insert helper
 	private fun renderInsertHelper(dslWriter: SourceWriter) {
-		dslWriter.line("inline fun <reified Result : ResultTuple> insert(cb : InsertDsl.()->ReturnValues<Result>) = statement { cb(InsertDsl(this)) }")
-		dslWriter.line("class InsertDsl(val builder : StatementBuilder) : Columns(), InsertStatementBuilder by builder {")
-		dslWriter.indent {
-			val parameterList = type.postgresTableColumns.joinToString(", ") {
-				"${it.memberName} : ${context.run { it.kotlinType }}${if (it.defaultable) "${"?".onlyWhen(!it.nullable)} = null" else ""}"
-			}
-			val valuesConstruction = type.postgresTableColumns.joinToString("\n") {
-				val insertValue = "values.add(Pair(this.${it.memberName}, ${it.memberName}))"
-				if (it.defaultable) {
-					"""
+		dslWriter.run {
+			line("inline fun <reified Result : ResultTuple> insert(cb : InsertDsl.()->ReturnValues<Result>) = statement { cb(InsertDsl(this)) }")
+			line("class InsertDsl(val builder : StatementBuilder) : Columns(), InsertStatementBuilder by builder {")
+			indent {
+				val parameterList = type.postgresTableColumns.joinToString(", ") {
+					"${it.memberName} : ${context.run { it.kotlinType }}${if (it.defaultable) "${"?".onlyWhen(!it.nullable)} = null" else ""}"
+				}
+				val valuesConstruction = type.postgresTableColumns.joinToString("\n") {
+					val insertValue = "values.add(Pair(this.${it.memberName}, ${it.memberName}))"
+					if (it.defaultable) {
+						"""
 						if(${it.memberName} != null) {
 							$insertValue
 						}
 					""".trimIndent()
-				} else {
-					insertValue
+					} else {
+						insertValue
+					}
 				}
-			}
 
-			dslWriter.line("fun values($parameterList) : Unit {")
-			dslWriter.indent {
-				dslWriter.line("val values = mutableListOf<Pair<TableColumn<*>, Any?>>()")
-				dslWriter.line(valuesConstruction)
-				dslWriter.line("addInsertValues(values)")
+				line("fun values($parameterList) {")
+				indent {
+					line("val values = mutableListOf<Pair<TableColumn<*>, Any?>>()")
+					line(valuesConstruction)
+					line("addInsertValues(values)")
+				}
+				line("}")
+
+				line("fun values(row : $rowName) {")
+				indent {
+					line("addInsertValues(listOf(${type.postgresTableColumns.joinToString(", ") { "Pair(this.${it.memberName}, row.${it.memberName})" } }))")
+				}
+				line("}")
 			}
-			dslWriter.line("}")
+			line("}")
 		}
-		dslWriter.line("}")
 	}
 
 	private fun renderUpdateHelper(dslWriter : SourceWriter){

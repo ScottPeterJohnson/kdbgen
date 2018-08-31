@@ -4,10 +4,10 @@ import io.kotlintest.matchers.beEmpty
 import io.kotlintest.matchers.should
 import io.kotlintest.matchers.shouldBe
 import io.kotlintest.matchers.shouldNot
+import net.justmachinery.kdbgen.dsl.clauses.Result2
+import net.justmachinery.kdbgen.dsl.clauses.join
 import net.justmachinery.kdbgen.test.generated.enums.EnumTypeTest
-import net.justmachinery.kdbgen.test.generated.tables.arrayTestTable
-import net.justmachinery.kdbgen.test.generated.tables.enumTestTable
-import net.justmachinery.kdbgen.test.generated.tables.usersTable
+import net.justmachinery.kdbgen.test.generated.tables.*
 
 class BasicOperationsTest : DatabaseTest() {
 	init {
@@ -49,6 +49,22 @@ class BasicOperationsTest : DatabaseTest() {
 						returning(userName)
 					}.values() shouldBe users
 				}
+			}
+		}
+
+		"should be able to do a basic join" {
+			sql {
+				val enum = EnumTestRow(1, EnumTypeTest.test2)
+				val user = UsersRow(1, null, "foo@bar.com")
+				usersTable.insert { values(user); returningNothing() }.execute()
+				enumTestTable.insert { values(enum); returningNothing() }.execute()
+				usersTable.select {
+					val enumTest = join(enumTestTable)
+					where {
+						userId equalTo enumTest.enumTestId
+					}
+					returning(`*`, enumTest.`*`)
+				}.single() shouldBe Result2(user, enum)
 			}
 		}
 	}
