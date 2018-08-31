@@ -31,7 +31,7 @@ sourceSets {
 
 task generatePostgresInterface(type : JavaExec){
     classpath = sourceSets.test.compileClasspath
-    main = "net.justmachinery.kdbgen.GeneratePostgresInterfaceKt"
+    main = "net.justmachinery.kdbgen.generation.GeneratePostgresInterfaceKt"
     args '--databaseUrl=jdbc:postgresql://localhost:5432/kdbgentest?user=kdbgentest&password=kdbgentest'
     args '--enumPackage=net.justmachinery.kdbgen.test.generated.enums'
     args '--dataPackage=net.justmachinery.kdbgen.test.generated.tables'

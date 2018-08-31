@@ -3,7 +3,9 @@ package net.justmachinery.kdbgen
 import io.kotlintest.Spec
 import io.kotlintest.TestCase
 import io.kotlintest.TestSuite
+import net.justmachinery.kdbgen.dsl.ConnectionProvider
 import org.postgresql.jdbc.PgConnection
+import java.sql.Connection
 import java.sql.DriverManager
 import java.util.*
 
@@ -13,6 +15,14 @@ abstract class DatabaseTest : Spec() {
 	val connection = DriverManager.getConnection(TEST_DATABASE_URL, Properties()) as PgConnection
 	init {
 		connection.autoCommit = false
+	}
+	val connectionProvider = object : ConnectionProvider() {
+		override fun getConnection(): Connection {
+			return connection
+		}
+	}
+	fun sql(cb : ConnectionProvider.()->Unit){
+		cb(connectionProvider)
 	}
 
 	private var current = rootTestSuite
