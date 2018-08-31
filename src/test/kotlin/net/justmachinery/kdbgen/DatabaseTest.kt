@@ -16,7 +16,7 @@ abstract class DatabaseTest : Spec() {
 	init {
 		connection.autoCommit = false
 	}
-	val connectionProvider = object : ConnectionProvider() {
+	val connectionProvider = object : ConnectionProvider {
 		override fun getConnection(): Connection {
 			return connection
 		}

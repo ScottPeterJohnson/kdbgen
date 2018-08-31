@@ -1,6 +1,7 @@
 package net.justmachinery.kdbgen.dsl
 
 import net.justmachinery.kdbgen.dsl.clauses.*
+import kotlin.reflect.KClass
 
 
 data class StatementBuilder (
@@ -11,7 +12,7 @@ data class StatementBuilder (
 		val insertValues : MutableList<List<Pair<TableColumn<*>, *>>> = mutableListOf(),
 		val whereClauses : MutableList<WhereClause> = mutableListOf(),
 		var isDelete : Boolean = false
-) : WhereStatementBuilder, UpdateStatementBuilder, ReturningStatementBuilder, InsertStatementBuilder {
+) : WhereStatementBuilder, UpdateStatementBuilder, ReturningStatementBuilder, InsertStatementBuilder, DeleteStatementBuilder {
 	override fun addWhereClause(sql : String, paramType : String, paramValue : Any?){
 		whereClauses += WhereClause(sql, paramType, paramValue)
 	}
@@ -21,16 +22,8 @@ data class StatementBuilder (
 	override fun addInsertValues(values : List<Pair<TableColumn<*>, *>>){
 		insertValues.add(values)
 	}
-	fun addSelectValue(source : SelectSource<*>){
-		selectValues.add(source)
-	}
 	override fun addReturningValue(source : SelectSource<*>){
 		selectValues.add(source)
-	}
-	fun addSelectValues(vararg sources : SelectSource<*>){
-		for(source in sources){
-			selectValues.add(source)
-		}
 	}
 
 	internal fun operation() : SqlOperation {
@@ -64,10 +57,10 @@ internal enum class SqlOperation {
 	DELETE
 }
 
-fun <Q : Table, T> Q.statement(cb : StatementBuilder.()->Unit) : StatementReturning<T> {
+inline fun <Q : Table, reified Result : ResultTuple> Q.statement(cb : StatementBuilder.()->ReturnValues<Result>) : StatementReturning<Result> {
 	val builder = StatementBuilder(this)
 	cb(builder)
-	return StatementReturning(builder)
+	return StatementReturning(builder, Result::class)
 }
 
-data class StatementReturning<T>(val builder : StatementBuilder)
+data class StatementReturning<Result : ResultTuple>(val builder : StatementBuilder, val resultClass : KClass<Result>)

@@ -27,12 +27,12 @@ fun executeStatement(statement : StatementReturning<*>, connection: Connection) 
 	prepareStatement(statement, connection).execute()
 }
 
-inline fun <reified Result : ResultTuple> executeStatementReturning(statement : StatementReturning<Result>, connection: Connection): List<Result> {
+fun <Result : ResultTuple> executeStatementReturning(statement : StatementReturning<Result>, connection: Connection): List<Result> {
 	val prepared = prepareStatement(statement, connection)
 	val resultSet = prepared.executeQuery()
 	val results = mutableListOf<Result>()
 	while (resultSet.next()) {
-		val value = selectMapper(Result::class, statement.builder.selectValues, resultSet)
+		val value = selectMapper(statement.resultClass, statement.builder.selectValues, resultSet)
 		results.add(value)
 	}
 	prepared.close()
@@ -73,7 +73,7 @@ private fun convertParameter(param: Parameter, connection: Connection): Any? {
 	return param.value
 }
 
-private fun <Result> renderStatement(statement : StatementReturning<Result>, connection: Connection): Pair<String, List<Any?>> {
+private fun <Result : ResultTuple> renderStatement(statement : StatementReturning<Result>, connection: Connection): Pair<String, List<Any?>> {
 	val builder = statement.builder
 	val selectValues = builder.selectValues
 	val insertValues = builder.insertValues
