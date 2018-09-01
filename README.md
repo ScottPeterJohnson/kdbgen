@@ -43,7 +43,7 @@ You will need to replace:
 
 ### Multiplatform Kotlin
 To use this in a multiplatform Kotlin project (JS + JVM + Shared code), kdbgen should be a dependency of the JVM project, 
-the `--primitiveOnly` flag should be enabled, the `--outputDirectory` should point to the shared project's generated sources,
+the `--useCommonTypes` flag should be enabled if any of your columns are timestamps or UUIDs, the `--outputDirectory` should point to the shared project's generated sources,
 and `--dslDirectory` should be set to the JVM project's generated sources. 
 
 ### Basic example
@@ -66,84 +66,95 @@ fun sql(cb : ConnectionProvider.()->Unit){
 }
 ```
 
-#### Insert user
-```kotlin
-sql { //Brings connection provider into scope
-    usersTable.run { //Brings the users table into scope
-        insert {
-            //Since "name" is optional, we don't have to provide it as an argument to this insert helper method.
-            values(uid = "test", email = "foo@bar")
-        }.execute()
-        
-        //Add multiple users:
-        val users = listOf("test", "test2", "test3")
-        insert {
-            for(user in users){
-                values(uid = user, email = "$user@test.org")
-            }
-        }.execute()
-    }  
-}
-```
-
 #### Select user
 ```kotlin
 sql {
-    usersTable.run {
-        //Find the user with uid "test". This will return a convenience data class containing all columns.
-        select(`*`) {
-            where {
-                uid equalTo "test"
-            }
-        }.value()
+    //Find the user with uid "test". This will return a convenience data class containing all columns.
+    usersTable.select {
+        where {
+            uid equalTo "test"
+        }
+        returning(`*`)
+    }.value()
+    
+    //Find the emails of all users named "John Smith". This will return just the email column.
+    val email = usersTable.select { 
+        where { name equalTo "John Smith" }
+        returning(email)
+    }.values()
+    
+    //Both email and user ID, wrapped in a tuple like structure.
+    val results = usersTable.select { returning(uid, email) }.list()
+    results.map { it.first } //UID
+    results.map { it.second } //Email
+}
+```
+
+#### Insert user
+```kotlin
+sql { //Brings connection provider into scope
+    usersTable.insert { 
+        //Since "name" is optional, we don't have to provide it as an argument to this insert helper method.
+        values(uid = "test", email = "foo@bar")
+        returningNothing()    
+    }.execute()
         
-        //Find the emails of all users named "John Smith". This will return just the email column.
-        val email = select(email) { 
-            where { name equalTo "John Smith" }
-        }.values()
-        
-        //Both email and user ID, wrapped in a tuple like structure.
-        val results = select(uid, email) { }.list()
-        results.map { it.first } //UID
-        results.map { it.second } //Email
-    }
+    //Add multiple users:
+    val users = listOf("test", "test2", "test3")
+    usersTable.insert {
+        //Can insert using the convenience row class
+        values(UsersRow(uid = "test0", email = "foo@bar.org"))
+        for(user in users){
+            values(uid = user, email = "$user@test.org")
+        }
+        returningNothing()
+    }.execute()
 }
 ```
 
 #### Update user
 ```kotlin
 sql {
-    usersTable.run {
-        //The "returning" variants of update/delete allow for returning values affected
-        updateReturning {
-            name setTo "Joe Smith"
-            where {
-                name equalTo "test"
-            }
-            returning(uid)
-        }.values()
-    }
+    usersTable.update {
+        name setTo "Joe Smith"
+        where {
+            name equalTo "test"
+        }
+        returning(uid)
+    }.values()
 }
 ```
 
 ### Delete user
 ```kotlin
 sql {
-    usersTable.run {
-        delete {
-            where {
-                name equalTo "test"
-            }
+    usersTable.delete {
+        where {
+            name equalTo "test"
         }
-    }
+        returningNothing()
+    }.execute()
 }
+```
+
+### Join tables
+```kotlin
+usersTable.select {
+    val addresses = join(addressTable)
+    where {
+        name equalTo "test"
+        //The join condition
+        addressId equalTo address.id
+        addresses.state equalTo "CA"
+    }
+    returning(`*`)
+}.list()
+
 ```
 
 ## Caveats
 - Library syntax may change.
 
 ## TODO
-- Queries on more than one table
-- Upsert
-- Conflict clauses
+- Upsert/conflict clauses
 - More operations

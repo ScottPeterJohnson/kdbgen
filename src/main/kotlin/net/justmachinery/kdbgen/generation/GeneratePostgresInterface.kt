@@ -12,7 +12,11 @@ import java.sql.Timestamp
 import java.util.*
 
 const val kdbGen = "net.justmachinery.kdbgen"
-
+const val commonTypesPackage = "$kdbGen.common"
+const val commonTimestamp = "CommonTimestamp"
+const val commonTimestampFull = "$commonTypesPackage.$commonTimestamp"
+const val commonUuid = "CommonUUID"
+const val commonUuidFull = "$commonTypesPackage.$commonUuid"
 const val defaultOutputDirectory = "build/generated-sources/kotlin"
 const val defaultEnumPackage = "net.justmachinery.kdbgen.enums"
 const val defaultDataPackage = "net.justmachinery.kdbgen.tables"
@@ -23,7 +27,7 @@ class Settings(parser: ArgParser) {
 			defaultOutputDirectory)
 	private val dslOutputDirectory by parser.storing("Directory to output DSL helpers to, if different than output directory").default(
 			null)
-	val primitiveOnly by parser.flagging("Outputs types only as Kotlin primitives. Timestamps will be represented as Longs (losing precision below the millisecond level), and UUIDs as strings.")
+	val useCommonTypes by parser.flagging("Outputs common JS/JVM types instead of UUID/Timestamp.")
 	val enumPackage by parser.storing("Package to output enum classes to").default(defaultEnumPackage)
 	val dataPackage by parser.storing("Package to output beans and DSL to").default(defaultDataPackage)
 
@@ -32,6 +36,7 @@ class Settings(parser: ArgParser) {
 
 	fun enumDirectory(): String = directory(outputDirectory, enumPackage)
 	fun dataDirectory(): String = directory(outputDirectory, dataPackage)
+	fun commonTypesDirectory(): String = directory(outputDirectory, commonTypesPackage)
 	fun dslDirectory(): String = directory(dslOutputDirectory ?: outputDirectory, dataPackage)
 }
 
@@ -44,6 +49,7 @@ fun run(settings: Settings) {
 	File(settings.enumDirectory()).deleteRecursively()
 	File(settings.dataDirectory()).deleteRecursively()
 	File(settings.dslDirectory()).deleteRecursively()
+	File(settings.commonTypesDirectory()).deleteRecursively()
 
 	val context = constructContext(settings)
 	for(enum in context.postgresTypeToEnum.values){
@@ -53,6 +59,10 @@ fun run(settings: Settings) {
 	for (type in context.tables) {
 		val renderer = DslRenderer(type, context)
 		renderer.render()
+	}
+
+	if(settings.useCommonTypes){
+		renderCommonTypes(settings)
 	}
 }
 
@@ -132,13 +142,20 @@ internal class RenderingContext(
 			"json" -> Json::class
 			"jsonb" -> Json::class
 			"text" -> String::class
-			"timestamp" -> if (settings.primitiveOnly) Long::class else Timestamp::class
-			"uuid" -> if (settings.primitiveOnly) String::class else UUID::class
+			"timestamp" -> if (!settings.useCommonTypes) Timestamp::class else null
+			"uuid" -> if (!settings.useCommonTypes) UUID::class else null
 			else -> null
 		}
 		if (defaultType != null) {
 			return TypeRepr(defaultType.qualifiedName!!, nullable, emptyList())
 		}
+		if(postgresType == "timestamp"){
+			return TypeRepr(commonTimestampFull, nullable, emptyList())
+		}
+		if(postgresType == "uuid"){
+			return TypeRepr(commonUuidFull, nullable, emptyList())
+		}
+
 		if (postgresTypeToEnum.containsKey(postgresType)) {
 			return TypeRepr(
 					"${settings.enumPackage}.${postgresTypeToEnum[postgresType]!!.className}",

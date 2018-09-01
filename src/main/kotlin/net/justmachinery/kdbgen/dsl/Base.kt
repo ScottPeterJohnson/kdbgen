@@ -1,9 +1,13 @@
 package net.justmachinery.kdbgen.dsl
 
 import net.justmachinery.kdbgen.dsl.clauses.*
+import net.justmachinery.kdbgen.generation.commonTimestampFull
+import net.justmachinery.kdbgen.generation.commonUuidFull
 import net.justmachinery.kdbgen.utility.selectMapper
 import java.sql.Connection
 import java.sql.PreparedStatement
+import java.sql.Timestamp
+import java.util.*
 import kotlin.reflect.KType
 
 interface Table<Columns> {
@@ -50,12 +54,10 @@ fun prepareStatement(statement : StatementReturning<*>, connection : Connection)
 	return prepared
 }
 
-internal fun TableColumn<*>.asParameter(value: Any?): String {
+internal fun TableColumn<*>.asParameter(): String {
 	return if (
 			listOf("inet", "jsonb").contains(rawType)
 			|| postgresEnum
-			|| (rawType == "timestamp" && value is Long)
-			|| (rawType == "uuid" && value is String)
 	) {
 		"CAST (? AS $rawType)"
 	} else {
@@ -71,6 +73,14 @@ private fun convertParameter(param: Parameter, connection: Connection): Any? {
 				param.value.toTypedArray())
 	} else if (param.value is Enum<*>) {
 		return param.value.toString()
+	} else if(param.value?.javaClass?.canonicalName == commonTimestampFull){
+		val millis = param.value.javaClass.getMethod("getMillis").invoke(param.value) as Long
+		val nanos = param.value.javaClass.getMethod("getNanos").invoke(param.value)  as Int
+		return Timestamp(millis).apply { this.nanos = nanos }
+	} else if(param.value?.javaClass?.canonicalName == commonUuidFull){
+		val msb = param.value.javaClass.getMethod("getMostSigBits").invoke(param.value) as Long
+		val lsb  = param.value.javaClass.getMethod("getLeastSigBits").invoke(param.value) as Long
+		return UUID(msb, lsb)
 	}
 	return param.value
 }
@@ -97,7 +107,7 @@ private fun <Result : ResultTuple> renderStatement(statement : StatementReturnin
 		}
 		SqlOperation.INSERT -> {
 			val columns = insertValues.first().joinToString(", ") { it.first.name }
-			val valueList = insertValues.map { values -> "(" + values.joinToString(", ") { it.first.asParameter(it.second) } + ")" }
+			val valueList = insertValues.map { values -> "(" + values.joinToString(", ") { it.first.asParameter() } + ")" }
 			parameters += insertValues.flatMap { values ->
 				values.map {
 					Parameter(
@@ -109,7 +119,7 @@ private fun <Result : ResultTuple> renderStatement(statement : StatementReturnin
 			sql = "INSERT INTO $tableName($columns) VALUES ${valueList.joinToString(",")}"
 		}
 		SqlOperation.UPDATE -> {
-			val sets = updateValues.joinToString(", ") { it.first.name + " = " + it.first.asParameter(it.second) }
+			val sets = updateValues.joinToString(", ") { it.first.name + " = " + it.first.asParameter() }
 			parameters += updateValues.map {
 				Parameter(
 						postgresType = it.first.rawType,

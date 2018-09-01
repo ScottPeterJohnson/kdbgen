@@ -4,6 +4,8 @@ import io.kotlintest.matchers.beEmpty
 import io.kotlintest.matchers.should
 import io.kotlintest.matchers.shouldBe
 import io.kotlintest.matchers.shouldNot
+import net.justmachinery.kdbgen.common.CommonTimestamp
+import net.justmachinery.kdbgen.common.CommonUUID
 import net.justmachinery.kdbgen.dsl.clauses.Result2
 import net.justmachinery.kdbgen.dsl.clauses.join
 import net.justmachinery.kdbgen.test.generated.enums.EnumTypeTest
@@ -104,6 +106,24 @@ class ArrayTest : DatabaseTest() {
 					select { returning(`*`) }.value().arrayColumn shouldBe testList
 					select { returning(arrayColumn) }.value() shouldBe testList
 				}
+			}
+		}
+	}
+}
+
+class CommonTypeTest : DatabaseTest() {
+	init {
+		"should be able to handle UUIDs and timestamps" {
+			sql {
+				val uuid = CommonUUID(100L, 200L)
+				val timestamp = CommonTimestamp(2000, 3000)
+				commonTestTable.insert {
+					values(uuid = uuid, timestamp = timestamp)
+					returningNothing()
+				}.execute()
+				val returned = commonTestTable.select { returning(`*`) }.value()
+				returned.uuid shouldBe uuid
+				returned.timestamp shouldBe timestamp
 			}
 		}
 	}

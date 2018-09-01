@@ -4,6 +4,8 @@ import net.justmachinery.kdbgen.dsl.clauses.DataClassSource
 import net.justmachinery.kdbgen.dsl.clauses.RawColumnSource
 import net.justmachinery.kdbgen.dsl.clauses.ResultTuple
 import net.justmachinery.kdbgen.dsl.clauses.SelectSource
+import net.justmachinery.kdbgen.generation.commonTimestampFull
+import net.justmachinery.kdbgen.generation.commonUuidFull
 import org.postgresql.jdbc.PgArray
 import org.postgresql.util.PGobject
 import java.sql.ResultSet
@@ -59,11 +61,11 @@ private fun convertFromResultSet(value : Any?, type : KType) : Any?  {
 		val typeClass = type.jvmErasure.java
 		result = reflectionCreateEnum(typeClass, result)
 	}
-	if(result is Timestamp && notNullType.isSubtypeOf(Long::class.starProjectedType)){
-		result = result.time
+	if(result is Timestamp && notNullType.jvmErasure.qualifiedName == commonTimestampFull){
+		result = notNullType.jvmErasure.primaryConstructor!!.call(result.time, result.nanos)
 	}
-	if(result is UUID && notNullType.isSubtypeOf(String::class.starProjectedType)){
-		result = result.toString()
+	if(result is UUID && notNullType.jvmErasure.qualifiedName == commonUuidFull){
+		result = notNullType.jvmErasure.primaryConstructor!!.call(result.mostSignificantBits, result.leastSignificantBits)
 	}
 	return result
 }

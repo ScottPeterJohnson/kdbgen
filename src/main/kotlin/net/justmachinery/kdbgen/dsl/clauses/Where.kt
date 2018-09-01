@@ -16,7 +16,7 @@ interface WhereStatementBuilder {
 
 class WhereInit(private val builder : WhereStatementBuilder) {
 	private fun <Value> TableColumn<Value>.opClause(op : String, value : Value){
-		builder.addWhereClause("${this.name} $op ${this.asParameter(value)}", listOf(Parameter(this.rawType, value)))
+		builder.addWhereClause("${this.name} $op ${this.asParameter()}", listOf(Parameter(this.rawType, value)))
 	}
 	private fun <Value> TableColumn<Value>.colClause(op : String, column : TableColumn<Value>){
 		builder.addWhereClause("${this.name} $op ${column.name}", emptyList())
