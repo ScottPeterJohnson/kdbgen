@@ -1,6 +1,6 @@
 package net.justmachinery.kdbgen.dsl.clauses
 
-import kotlin.reflect.KType
+import net.justmachinery.kdbgen.dsl.PostgresType
 
 /**
  * Result data tuples
@@ -26,7 +26,7 @@ data class DataClassSource<Value>(
 		val construct: (List<Any?>)->Value
 ) : SelectSourceBase<Value>()
 //A raw column of a table
-data class RawColumnSource<Value>(val name : String, val type : KType) : SelectSourceBase<Value>()
+data class RawColumnSource<Value>(val name : String, val type : PostgresType) : SelectSourceBase<Value>()
 
 data class ReturnValues<V>(val values : List<*>)
 @Suppress("UNCHECKED_CAST")

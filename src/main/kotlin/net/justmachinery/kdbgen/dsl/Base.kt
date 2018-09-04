@@ -9,6 +9,8 @@ import java.sql.PreparedStatement
 import java.sql.Timestamp
 import java.util.*
 import kotlin.reflect.KType
+import kotlin.reflect.KTypeProjection
+import kotlin.reflect.full.createType
 
 interface Table<Columns> {
 	//This was given a property name that cannot appear as a SQL column name, since generated classes are expected to have
@@ -20,13 +22,29 @@ interface Table<Columns> {
 }
 
 class TableColumn<Type>(val name: String,
-                        val rawType: String,
-                        val postgresEnum: Boolean,
-                        type : KType) : SelectSource<Type>
+                        val type: PostgresType) : SelectSource<Type>
 {
 	override val selectSource = RawColumnSource<Type>(name, type)
 }
 
+data class PostgresType(val type : KType, val rawType : String, val requiresCast : Boolean) {
+	val qualifiedName = type.toString().removePrefix("class ")
+	fun asParameter(): String {
+		return if (
+				listOf("inet", "jsonb").contains(rawType)
+				|| requiresCast
+		) {
+			"CAST (? AS $rawType)"
+		} else {
+			"?"
+		}
+	}
+
+	fun toArray() : PostgresType {
+		return PostgresType(List::class.createType(listOf(KTypeProjection.invariant(type))), rawType.plus("[]"), true)
+	}
+
+}
 
 
 fun executeStatement(statement : StatementReturning<*>, connection: Connection) {
@@ -54,33 +72,20 @@ fun prepareStatement(statement : StatementReturning<*>, connection : Connection)
 	return prepared
 }
 
-internal fun TableColumn<*>.asParameter(): String {
-	return if (
-			listOf("inet", "jsonb").contains(rawType)
-			|| postgresEnum
-	) {
-		"CAST (? AS $rawType)"
-	} else {
-		"?"
-	}
-}
-
-data class Parameter(val postgresType: String, val value: Any?)
-
-private fun convertParameter(param: Parameter, connection: Connection): Any? {
-	if (param.value is List<*>) {
-		return connection.createArrayOf(param.postgresType.removeSuffix("[]").removePrefix("_"),
+private fun <T : Any?> convertParameter(param: SqlClauseValue.Value<T>, connection: Connection): Any? {
+	when {
+		param.value is List<*> -> return connection.createArrayOf(param.type.rawType.removeSuffix("[]").removePrefix("_"),
 				param.value.toTypedArray())
-	} else if (param.value is Enum<*>) {
-		return param.value.toString()
-	} else if(param.value?.javaClass?.canonicalName == commonTimestampFull){
-		val millis = param.value.javaClass.getMethod("getMillis").invoke(param.value) as Long
-		val nanos = param.value.javaClass.getMethod("getNanos").invoke(param.value)  as Int
-		return Timestamp(millis).apply { this.nanos = nanos }
-	} else if(param.value?.javaClass?.canonicalName == commonUuidFull){
-		val msb = param.value.javaClass.getMethod("getMostSigBits").invoke(param.value) as Long
-		val lsb  = param.value.javaClass.getMethod("getLeastSigBits").invoke(param.value) as Long
-		return UUID(msb, lsb)
+		param.value is Enum<*> -> return param.value.toString()
+		param.value is Any -> if (param.type.qualifiedName == commonTimestampFull) {
+			val millis = param.value.javaClass.getMethod("getMillis").invoke(param.value) as Long
+			val nanos = param.value.javaClass.getMethod("getNanos").invoke(param.value) as Int
+			return Timestamp(millis).apply { this.nanos = nanos }
+		} else if (param.type.qualifiedName == commonUuidFull) {
+			val msb = param.value.javaClass.getMethod("getMostSigBits").invoke(param.value) as Long
+			val lsb = param.value.javaClass.getMethod("getLeastSigBits").invoke(param.value) as Long
+			return UUID(msb, lsb)
+		}
 	}
 	return param.value
 }
@@ -93,7 +98,7 @@ private fun <Result : ResultTuple> renderStatement(statement : StatementReturnin
 	val tableName = builder.table.`table name`
 
 	var sql: String
-	var parameters: List<Parameter> = emptyList()
+	var parameters: List<SqlClauseValue.Value<*>> = emptyList()
 
 	val joins = builder.joinTables.joinToString(", "){ it.`table name` }
 
@@ -106,26 +111,26 @@ private fun <Result : ResultTuple> renderStatement(statement : StatementReturnin
 			}
 		}
 		SqlOperation.INSERT -> {
-			val columns = insertValues.first().joinToString(", ") { it.first.name }
-			val valueList = insertValues.map { values -> "(" + values.joinToString(", ") { it.first.asParameter() } + ")" }
+			val columns = insertValues.flatMap { values -> values.map { it.column } }.distinct()
+			val columnNames = columns.joinToString(", ") { it.name }
+			val valueList = insertValues.map { values ->
+				val byColumn = values.associateBy { it.column }
+				val ordered = columns.map { byColumn[it] }
+				"(" + ordered.joinToString(", ") { it?.column?.type?.asParameter() ?: "DEFAULT" } + ")"
+			}
 			parameters += insertValues.flatMap { values ->
 				values.map {
-					Parameter(
-							postgresType = it.first.rawType,
-							value = it.second
+					SqlClauseValue.Value(
+							type = it.column.type,
+							value = it.value
 					)
 				}
 			}
-			sql = "INSERT INTO $tableName($columns) VALUES ${valueList.joinToString(",")}"
+			sql = "INSERT INTO $tableName($columnNames) VALUES ${valueList.joinToString(",")}"
 		}
 		SqlOperation.UPDATE -> {
-			val sets = updateValues.joinToString(", ") { it.first.name + " = " + it.first.asParameter() }
-			parameters += updateValues.map {
-				Parameter(
-						postgresType = it.first.rawType,
-						value = it.second
-				)
-			}
+			val sets = updateValues.joinToString(", ") { it.left.name + " = " + it.right.render() }
+			parameters += updateValues.flatMap { it.right.parameters() }
 			sql = "UPDATE $tableName SET $sets"
 			if(builder.joinTables.isNotEmpty()){
 				sql += " FROM $joins"
@@ -140,8 +145,8 @@ private fun <Result : ResultTuple> renderStatement(statement : StatementReturnin
 	}
 
 	if (builder.whereClauses.isNotEmpty()) {
-		sql += " WHERE " + builder.whereClauses.joinToString(" AND ") { it.sql }
-		parameters += builder.whereClauses.flatMap { it.parameters }
+		sql += " WHERE " + builder.whereClauses.joinToString(" AND ") { it.render() }
+		parameters += builder.whereClauses.flatMap { it.left.parameters().plus(it.right.parameters()) }
 	}
 	if (builder.operation() !== SqlOperation.SELECT && selectValues.isNotEmpty()) {
 		sql += " RETURNING " + selectsToParameters(selectValues).joinToString(", ")

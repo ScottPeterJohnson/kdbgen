@@ -105,7 +105,7 @@ internal class DslRenderer(
 				line("private companion object {")
 				indent {
 					type.postgresTableColumns.forEach {
-						line("private val ${it.memberName} = TableColumn<${context.run { it.kotlinType }}>(\"${it.rawName}\", \"${it.postgresType}\", ${it.postgresType in context.postgresTypeToEnum}, ${context.run { it.kotlinKType }})")
+						line("private val ${it.memberName} = TableColumn<${context.run { it.kotlinType }}>(\"${it.rawName}\", PostgresType(${context.run { it.kotlinKType }}, \"${it.postgresType}\", ${it.postgresType in context.postgresTypeToEnum}))")
 					}
 					line("""
 					private val `*` = DataClassSource(
@@ -145,7 +145,7 @@ internal class DslRenderer(
 					"${it.memberName} : ${context.run { it.kotlinType }}${if (it.defaultable) "${"?".onlyWhen(!it.nullable)} = null" else ""}"
 				}
 				val valuesConstruction = type.postgresTableColumns.joinToString("\n") {
-					val insertValue = "values.add(Pair(this.${it.memberName}, ${it.memberName}))"
+					val insertValue = "values.add(SqlInsertValue(this.${it.memberName}, ${it.memberName}))"
 					if (it.defaultable) {
 						"""
 						if(${it.memberName} != null) {
@@ -159,7 +159,7 @@ internal class DslRenderer(
 
 				line("fun values($parameterList) {")
 				indent {
-					line("val values = mutableListOf<Pair<TableColumn<*>, Any?>>()")
+					line("val values = mutableListOf<SqlInsertValue<*>>()")
 					line(valuesConstruction)
 					line("addInsertValues(values)")
 				}
@@ -167,7 +167,7 @@ internal class DslRenderer(
 
 				line("fun values(row : $rowName) {")
 				indent {
-					line("addInsertValues(listOf(${type.postgresTableColumns.joinToString(", ") { "Pair(this.${it.memberName}, row.${it.memberName})" } }))")
+					line("addInsertValues(listOf(${type.postgresTableColumns.joinToString(", ") { "SqlInsertValue(this.${it.memberName}, row.${it.memberName})" } }))")
 				}
 				line("}")
 			}

@@ -27,7 +27,7 @@ fun <Result : ResultTuple> selectMapper(resultClass : KClass<Result>, selects : 
 		val source = select.selectSource
 		return when(source){
 			is RawColumnSource -> {
-				convertFromResultSet(resultSet.getObject(source.name), source.type)
+				convertFromResultSet(resultSet.getObject(source.name), source.type.type)
 			}
 			is DataClassSource -> {
 				val params = source.constructorParameters.map(::parseSelect)
