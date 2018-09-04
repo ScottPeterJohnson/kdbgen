@@ -1,5 +1,6 @@
 package net.justmachinery.kdbgen.utility
 
+import net.justmachinery.kdbgen.dsl.SqlScope
 import net.justmachinery.kdbgen.dsl.clauses.DataClassSource
 import net.justmachinery.kdbgen.dsl.clauses.RawColumnSource
 import net.justmachinery.kdbgen.dsl.clauses.ResultTuple
@@ -22,12 +23,12 @@ import kotlin.reflect.jvm.jvmErasure
 
 typealias Json = String
 
-fun <Result : ResultTuple> selectMapper(resultClass : KClass<Result>, selects : List<SelectSource<*>>, resultSet : ResultSet) : Result {
+fun <Result : ResultTuple> selectMapper(resultClass : KClass<Result>, scope: SqlScope, selects : List<SelectSource<*>>, resultSet : ResultSet) : Result {
 	fun parseSelect(select : SelectSource<*>) : Any? {
 		val source = select.selectSource
 		return when(source){
 			is RawColumnSource -> {
-				convertFromResultSet(resultSet.getObject(source.name), source.type.type)
+				convertFromResultSet(resultSet.getObject(scope.run { source.column.renderParameter() }), source.column.type.type)
 			}
 			is DataClassSource -> {
 				val params = source.constructorParameters.map(::parseSelect)

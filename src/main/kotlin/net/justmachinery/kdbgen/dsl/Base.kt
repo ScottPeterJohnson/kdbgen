@@ -13,18 +13,18 @@ import kotlin.reflect.KTypeProjection
 import kotlin.reflect.full.createType
 
 interface Table<Columns> {
-	//This was given a property name that cannot appear as a SQL column name, since generated classes are expected to have
-	//arbitrarily named column properties
-	@Suppress("PropertyName")
-	val `table name`: String
+	fun aliased(alias : String) : Table<Columns>
+	val tableName: String
 
-	fun columns() : Columns
+	val columns : Columns
+	val columnsList : List<TableColumn<*>>
 }
 
-class TableColumn<Type>(val name: String,
+class TableColumn<Type>(val table : Table<*>,
+						val name: String,
                         val type: PostgresType) : SelectSource<Type>
 {
-	override val selectSource = RawColumnSource<Type>(name, type)
+	override val selectSource = RawColumnSource<Type>(this)
 }
 
 data class PostgresType(val type : KType, val rawType : String, val requiresCast : Boolean) {
@@ -41,7 +41,7 @@ data class PostgresType(val type : KType, val rawType : String, val requiresCast
 	}
 
 	fun toArray() : PostgresType {
-		return PostgresType(List::class.createType(listOf(KTypeProjection.invariant(type))), rawType.plus("[]"), true)
+		return PostgresType(List::class.createType(listOf(KTypeProjection.invariant(type))), rawType.plus("[]"), requiresCast)
 	}
 
 }
@@ -52,24 +52,26 @@ fun executeStatement(statement : StatementReturning<*>, connection: Connection) 
 }
 
 fun <Result : ResultTuple> executeStatementReturning(statement : StatementReturning<Result>, connection: Connection): List<Result> {
-	val prepared = prepareStatement(statement, connection)
+	val (prepared , scope) = prepareStatementAndScope(statement, connection)
 	val resultSet = prepared.executeQuery()
 	val results = mutableListOf<Result>()
 	while (resultSet.next()) {
-		val value = selectMapper(statement.resultClass, statement.builder.selectValues, resultSet)
+		val value = selectMapper(statement.resultClass, scope, statement.builder.selectValues, resultSet)
 		results.add(value)
 	}
 	prepared.close()
 	return results
 }
 
-fun prepareStatement(statement : StatementReturning<*>, connection : Connection) : PreparedStatement {
-	val (sql, parameters) = renderStatement(statement, connection)
+fun prepareStatement(statement : StatementReturning<*>, connection : Connection) : PreparedStatement =
+		prepareStatementAndScope(statement, connection).first
+fun prepareStatementAndScope(statement : StatementReturning<*>, connection : Connection) : Pair<PreparedStatement, SqlScope> {
+	val (sql, parameters, scope) = renderStatement(statement, connection)
 	val prepared = connection.prepareStatement(sql)
 	for ((index, parameter) in parameters.withIndex()) {
 		prepared.setObject(index + 1, parameter)
 	}
-	return prepared
+	return Pair(prepared, scope)
 }
 
 private fun <T : Any?> convertParameter(param: SqlClauseValue.Value<T>, connection: Connection): Any? {
@@ -90,21 +92,73 @@ private fun <T : Any?> convertParameter(param: SqlClauseValue.Value<T>, connecti
 	return param.value
 }
 
-private fun <Result : ResultTuple> renderStatement(statement : StatementReturning<Result>, connection: Connection): Pair<String, List<Any?>> {
+class SqlScope {
+	private val columnsInScope = mutableMapOf<String, MutableSet<TableColumn<*>>>()
+	fun addTable(table : Table<*>){
+		table.columnsList.forEach {
+			columnsInScope.getOrPut(it.name) { mutableSetOf() }.add(it)
+		}
+	}
+	fun removeTable(table : Table<*>){
+		table.columnsList.forEach {
+			columnsInScope.getOrPut(it.name) { mutableSetOf() }.remove(it)
+		}
+	}
+
+	private fun TableColumn<*>.needsQualification() : Boolean {
+		val inScope = columnsInScope[name]
+		return inScope?.size ?: 0 != 1 || inScope?.contains(this)?.not() ?: false
+	}
+	private fun TableColumn<*>.render(separator : String) : String {
+		if(needsQualification()){
+			return table.tableName + separator + name
+		} else {
+			return name
+		}
+	}
+
+	fun TableColumn<*>.renderParameter() = render("__")
+	fun TableColumn<*>.renderQualified() = render(".")
+
+
+	fun renderAsSelectParameter(selects : List<SelectSource<*>>) : List<String> {
+		fun parameters(select : SelectSourceBase<*>) : List<String> {
+			return when(select){
+				is RawColumnSource -> {
+					val column = select.column
+					listOf(if(column.needsQualification()) column.renderQualified() + " AS " + column.renderParameter() else column.name)
+				}
+				is DataClassSource -> select.constructorParameters.flatMap { parameters(it) }
+			}
+		}
+
+		return selects.flatMap { parameters(it.selectSource)}.distinct()
+	}
+}
+
+
+private data class RenderedStatement(val sql : String, val parameters : List<Any?>, val scope : SqlScope)
+private fun <Result : ResultTuple> renderStatement(statement : StatementReturning<Result>, connection: Connection): RenderedStatement {
 	val builder = statement.builder
 	val selectValues = builder.selectValues
 	val insertValues = builder.insertValues
 	val updateValues = builder.updateValues
-	val tableName = builder.table.`table name`
+	val tableName = builder.table.tableName
+
+	val scope = SqlScope()
+	scope.addTable(builder.table)
+	for(join in builder.joinTables){
+		scope.addTable(join)
+	}
 
 	var sql: String
 	var parameters: List<SqlClauseValue.Value<*>> = emptyList()
 
-	val joins = builder.joinTables.joinToString(", "){ it.`table name` }
+	val joins = builder.joinTables.joinToString(", "){ it.tableName }
 
 	when(builder.operation()){
 		SqlOperation.SELECT -> {
-			sql = "SELECT ${selectsToParameters(selectValues).joinToString(", ")} FROM $tableName"
+			sql = "SELECT ${scope.renderAsSelectParameter(selectValues).joinToString(", ")} FROM $tableName"
 			if(builder.joinTables.isNotEmpty()){
 				sql += ", "
 				sql += joins
@@ -127,9 +181,24 @@ private fun <Result : ResultTuple> renderStatement(statement : StatementReturnin
 				}
 			}
 			sql = "INSERT INTO $tableName($columnNames) VALUES ${valueList.joinToString(",")}"
+
+			val conflictClause = builder.conflictClause
+			if(conflictClause != null){
+				sql += " ON CONFLICT"
+				if(conflictClause.columns.isNotEmpty()){
+					sql += "(${conflictClause.columns.joinToString(",") { it.name } })"
+				}
+				if(conflictClause.updates.isNotEmpty()){
+					sql += " DO UPDATE SET ${conflictClause.updates.joinToString(",") { it.render(scope) } }"
+					parameters += conflictClause.updates.flatMap { it.right.parameters() }
+				} else {
+					sql += " DO NOTHING"
+				}
+
+			}
 		}
 		SqlOperation.UPDATE -> {
-			val sets = updateValues.joinToString(", ") { it.left.name + " = " + it.right.render() }
+			val sets = updateValues.joinToString(",") { it.render(scope) }
 			parameters += updateValues.flatMap { it.right.parameters() }
 			sql = "UPDATE $tableName SET $sets"
 			if(builder.joinTables.isNotEmpty()){
@@ -145,22 +214,11 @@ private fun <Result : ResultTuple> renderStatement(statement : StatementReturnin
 	}
 
 	if (builder.whereClauses.isNotEmpty()) {
-		sql += " WHERE " + builder.whereClauses.joinToString(" AND ") { it.render() }
+		sql += " WHERE " + builder.whereClauses.joinToString(" AND ") { it.render(scope) }
 		parameters += builder.whereClauses.flatMap { it.left.parameters().plus(it.right.parameters()) }
 	}
 	if (builder.operation() !== SqlOperation.SELECT && selectValues.isNotEmpty()) {
-		sql += " RETURNING " + selectsToParameters(selectValues).joinToString(", ")
+		sql += " RETURNING " + scope.renderAsSelectParameter(selectValues).joinToString(", ")
 	}
-	return Pair(sql, parameters.map { convertParameter(it, connection) })
-}
-
-fun selectsToParameters(selects : List<SelectSource<*>>) : List<String> {
-	fun parameters(select : SelectSourceBase<*>) : List<String> {
-		return when(select){
-			is RawColumnSource -> listOf(select.name)
-			is DataClassSource -> select.constructorParameters.flatMap { parameters(it) }
-		}
-	}
-
-	return selects.flatMap { parameters(it.selectSource)}.distinct()
+	return RenderedStatement(sql, parameters.map { convertParameter(it, connection) }, scope)
 }

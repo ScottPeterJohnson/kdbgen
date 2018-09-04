@@ -72,6 +72,29 @@ class BasicOperationsTest : DatabaseTest() {
 	}
 }
 
+class UpsertTest : DatabaseTest() {
+	init {
+		"should be able to do a basic upsert" {
+			sql {
+				val user = UsersRow(1, null, "foo@bar.com")
+				usersTable.insert { values(user); returningNothing() }.execute()
+				val user2 = user.copy(emailAddress = "baz@bing.com")
+				usersTable.insert {
+					values(user2)
+					onConflictDoUpdate(userId) { excluded ->
+						emailAddress setTo excluded.emailAddress
+					}
+					returningNothing()
+				}.execute()
+
+				usersTable.select {
+					returning(`*`)
+				}.value() shouldBe user2
+			}
+		}
+	}
+}
+
 
 class EnumTest : DatabaseTest() {
 	init {

@@ -10,10 +10,15 @@ data class StatementBuilder (
 		val selectValues : MutableList<SelectSource<*>> = mutableListOf(),
 		val updateValues: MutableList<SqlUpdateValue<*>> = mutableListOf(),
 		val insertValues : MutableList<List<SqlInsertValue<*>>> = mutableListOf(),
+		var conflictClause: OnConflictClause? = null,
 		val whereClauses : MutableList<WhereClause<*>> = mutableListOf(),
 		val joinTables : MutableList<Table<*>> = mutableListOf(),
 		var isDelete : Boolean = false
 ) : UpdateStatementBuilder, SelectStatementBuilder, InsertStatementBuilder, DeleteStatementBuilder {
+	override fun addConflictClause(clause: OnConflictClause) {
+		conflictClause = clause
+	}
+
 	override fun addJoinTable(table: Table<*>) {
 		joinTables.add(table)
 	}
@@ -55,7 +60,7 @@ data class StatementBuilder (
 
 
 sealed class SqlClauseValue<T> {
-	abstract fun render() : String
+	abstract fun render(scope : SqlScope) : String
 	abstract fun parameters() : List<SqlClauseValue.Value<*>>
 
 	data class Value<T>(val value : T, val type: PostgresType) : SqlClauseValue<T>() {
@@ -63,7 +68,7 @@ sealed class SqlClauseValue<T> {
 			return listOf(this)
 		}
 
-		override fun render(): String {
+		override fun render(scope : SqlScope): String {
 			return type.asParameter()
 		}
 	}
@@ -72,8 +77,8 @@ sealed class SqlClauseValue<T> {
 			return emptyList()
 		}
 
-		override fun render(): String {
-			return column.name
+		override fun render(scope : SqlScope): String {
+			return scope.run { column.renderQualified() }
 		}
 	}
 	data class FunctionCall<Returning>(val name : String, val arguments: List<SqlClauseValue<*>>) : SqlClauseValue<Returning>() {
@@ -81,18 +86,22 @@ sealed class SqlClauseValue<T> {
 			return arguments.flatMap { it.parameters() }
 		}
 
-		override fun render(): String {
-			return name + "(" + arguments.joinToString(","){ it.render() } + ")"
+		override fun render(scope : SqlScope): String {
+			return name + "(" + arguments.joinToString(","){ it.render(scope) } + ")"
 		}
 	}
 }
-data class SqlUpdateValue<T>(val left : TableColumn<T>, val right : SqlClauseValue<T>)
+data class SqlUpdateValue<T>(val left : TableColumn<T>, val right : SqlClauseValue<T>) {
+	fun render(scope : SqlScope) : String {
+		return left.name + " = " + right.render(scope)
+	}
+}
 
 data class SqlInsertValue<T>(val column : TableColumn<T>, val value : T)
 
 data class WhereClause<T>(val left : SqlClauseValue<T>, val op : String, val right : SqlClauseValue<T>) {
-	fun render() : String {
-		return left.render() + " $op " + right.render()
+	fun render(scope : SqlScope) : String {
+		return left.render(scope) + " $op " + right.render(scope)
 	}
 }
 
