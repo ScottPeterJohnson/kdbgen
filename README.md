@@ -152,9 +152,21 @@ usersTable.select {
 
 ```
 
+### Upsert / Conflict Clause
+```kotlin
+usersTable.insert {
+    values(userId = 3, name = "John Smith", email = "foo@bar.com")
+    //Currently only supports column inferred constraints
+    onConflictDoUpdate(userId){ excluded ->
+        email setTo excluded.email
+    }
+    returningNothing()
+}
+
+```
+
 ## Caveats
 - Library syntax may change.
 
 ## TODO
-- Upsert/conflict clauses
 - More operations

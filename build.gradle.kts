@@ -20,7 +20,7 @@ plugins {
 }
 group = "net.justmachinery.kdbgen"
 description = "Utility to generate Kotlin classes to interface with a database"
-version = "0.4.1"
+version = "0.4.2"
 
 repositories {
 	mavenCentral()
@@ -85,7 +85,6 @@ tasks {
 
 
 dependencies {
-	compile("net.justmachinery.kdbgen:kdbgen-common:0.4.1")
 	compile("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.2.61")
 	compile("org.reflections:reflections:0.9.10")
 	compile("org.postgresql:postgresql:9.4.1212")
