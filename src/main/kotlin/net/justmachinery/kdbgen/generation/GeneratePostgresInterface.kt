@@ -30,6 +30,7 @@ class Settings(parser: ArgParser) {
 	val useCommonTypes by parser.flagging("Outputs common JS/JVM types instead of UUID/Timestamp.")
 	val enumPackage by parser.storing("Package to output enum classes to").default(defaultEnumPackage)
 	val dataPackage by parser.storing("Package to output beans and DSL to").default(defaultDataPackage)
+	val dataAnnotation by parser.adding("Fully qualified annotations to add to emitted data classes, for e.g. serialization")
 
 	private fun directory(directory: String, `package`: String) = Paths.get(directory,
 			`package`.replace(".", "/")).toString()

@@ -8,6 +8,7 @@ fun renderCommonTypes(settings : Settings){
 	output.createNewFile()
 	output.writeText("""
 		package $commonTypesPackage
+		${settings.dataAnnotation.joinToString("\n") { "@$it"}}
 		data class $commonUuid(val mostSigBits : Long, val leastSigBits : Long)
 		data class $commonTimestamp(val millis : Long, val nanos : Int)
 	""".trimIndent())

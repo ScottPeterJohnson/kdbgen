@@ -79,6 +79,9 @@ internal class DslRenderer(
 
 	private fun renderRowClass(settings: Settings, writer: SourceWriter) {
 		fun writeTemplate(actualWriter: SourceWriter) {
+			for(annotation in settings.dataAnnotation){
+				actualWriter.line("@$annotation")
+			}
 			actualWriter.line("data class $rowName(")
 			actualWriter.indent {
 				actualWriter.line(type.postgresTableColumns.map {

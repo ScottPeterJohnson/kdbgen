@@ -46,7 +46,11 @@ To use this in a multiplatform Kotlin project (JS + JVM + Shared code), kdbgen s
 the `--useCommonTypes` flag should be enabled if any of your columns are timestamps or UUIDs, the `--outputDirectory` should point to the shared project's generated sources,
 and `--dslDirectory` should be set to the JVM project's generated sources. 
 
-### Basic example
+### Serialization
+Add a flag, e.g. `--dataAnnotation=kotlinx.serialization.Serializable`, to use generated classes with 
+with kotlinx-serialization.
+
+### Basic examples
 
  Assume a basic users table with mandatory "uid", "email", and optional "name" fields.
  
@@ -125,7 +129,7 @@ sql {
 }
 ```
 
-### Delete user
+#### Delete user
 ```kotlin
 sql {
     usersTable.delete {
@@ -137,7 +141,7 @@ sql {
 }
 ```
 
-### Join tables
+#### Join tables
 ```kotlin
 usersTable.select {
     val addresses = join(addressTable)
@@ -152,7 +156,7 @@ usersTable.select {
 
 ```
 
-### Upsert / Conflict Clause
+#### Upsert / Conflict Clause
 ```kotlin
 usersTable.insert {
     values(userId = 3, name = "John Smith", email = "foo@bar.com")
