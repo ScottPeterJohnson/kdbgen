@@ -24,6 +24,24 @@ fun renderCommonTypes(settings : Settings){
 					val hi = 1L.shl(digits * 4)
 					return (hi.or(value.and(hi - 1))).toString(16).substring(1)
 				}
+
+				fun fromString(name: String): $commonUuid {
+					val components = name.split("-").toTypedArray()
+					if (components.size != 5)
+						throw IllegalArgumentException("Invalid UUID string: ${'$'}name")
+
+					var mostSigBits = components[0].toLong(16)
+					mostSigBits = mostSigBits shl 16
+					mostSigBits = mostSigBits or components[1].toLong(16)
+					mostSigBits = mostSigBits shl 16
+					mostSigBits = mostSigBits or components[2].toLong(16)
+
+					var leastSigBits = components[3].toLong(16)
+					leastSigBits = leastSigBits shl 48
+					leastSigBits = leastSigBits or components[4].toLong(16)
+
+					return $commonUuid(mostSigBits, leastSigBits)
+				}
 			}
 		}
 		data class $commonTimestamp(val millis : Long, val nanos : Int)
