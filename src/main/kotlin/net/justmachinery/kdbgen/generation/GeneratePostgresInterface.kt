@@ -31,6 +31,7 @@ class Settings(parser: ArgParser) {
 	val enumPackage by parser.storing("Package to output enum classes to").default(defaultEnumPackage)
 	val dataPackage by parser.storing("Package to output beans and DSL to").default(defaultDataPackage)
 	val dataAnnotation by parser.adding("Fully qualified annotations to add to emitted data classes, for e.g. serialization")
+	val mutableData by parser.flagging("Whether to generate properties on data classes as var instead of val")
 
 	private fun directory(directory: String, `package`: String) = Paths.get(directory,
 			`package`.replace(".", "/")).toString()

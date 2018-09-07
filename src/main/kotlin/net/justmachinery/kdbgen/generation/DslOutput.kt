@@ -85,7 +85,7 @@ internal class DslRenderer(
 			actualWriter.line("data class $rowName(")
 			actualWriter.indent {
 				actualWriter.line(type.postgresTableColumns.map {
-					"val ${it.memberName} : ${context.run { it.kotlinType }}"
+					"${if(settings.mutableData) "var" else "val"} ${it.memberName} : ${context.run { it.kotlinType }}"
 				}.joinToString(",\n"))
 			}
 			actualWriter.line(")")

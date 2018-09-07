@@ -20,7 +20,7 @@ plugins {
 }
 group = "net.justmachinery.kdbgen"
 description = "Utility to generate Kotlin classes to interface with a database"
-version = "0.4.5"
+version = "0.4.6"
 
 repositories {
 	mavenCentral()
@@ -78,6 +78,7 @@ tasks {
 		args("--enumPackage=net.justmachinery.kdbgen.test.generated.enums")
 		args("--dataPackage=net.justmachinery.kdbgen.test.generated.tables")
 		args("--useCommonTypes")
+		args("--mutableData")
 	}
 
 	getByName("compileTestKotlin").dependsOn.add("generatePostgresInterface")
