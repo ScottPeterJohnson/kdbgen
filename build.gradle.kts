@@ -20,7 +20,7 @@ plugins {
 }
 group = "net.justmachinery.kdbgen"
 description = "Utility to generate Kotlin classes to interface with a database"
-version = "0.4.6"
+version = "0.4.7"
 
 repositories {
 	mavenCentral()

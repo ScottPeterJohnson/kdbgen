@@ -146,6 +146,7 @@ internal class RenderingContext(
 			"text" -> String::class
 			"timestamp" -> if (!settings.useCommonTypes) Timestamp::class else null
 			"uuid" -> if (!settings.useCommonTypes) UUID::class else null
+			"bytea" -> ByteArray::class
 			else -> null
 		}
 		if (defaultType != null) {
