@@ -1,5 +1,6 @@
 package net.justmachinery.kdbgen.generation
 
+import net.justmachinery.kdbgen.kdbGen
 import net.justmachinery.kdbgen.utility.onlyWhen
 import java.io.File
 import java.io.FileOutputStream

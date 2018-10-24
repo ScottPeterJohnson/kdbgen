@@ -1,15 +1,16 @@
 package net.justmachinery.kdbgen
 
 import io.kotlintest.matchers.beEmpty
-import io.kotlintest.matchers.should
-import io.kotlintest.matchers.shouldBe
-import io.kotlintest.matchers.shouldNot
+import io.kotlintest.should
+import io.kotlintest.shouldBe
+import io.kotlintest.shouldNot
 import net.justmachinery.kdbgen.common.CommonTimestamp
 import net.justmachinery.kdbgen.common.CommonUUID
 import net.justmachinery.kdbgen.dsl.clauses.Result2
 import net.justmachinery.kdbgen.dsl.clauses.join
 import net.justmachinery.kdbgen.test.generated.enums.EnumTypeTest
 import net.justmachinery.kdbgen.test.generated.tables.*
+
 
 class BasicOperationsTest : DatabaseTest() {
 	init {

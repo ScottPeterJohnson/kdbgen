@@ -1,40 +1,37 @@
 package net.justmachinery.kdbgen.generation
 
-import com.xenomachina.argparser.ArgParser
-import com.xenomachina.argparser.default
+import net.justmachinery.kdbgen.commonTimestampFull
+import net.justmachinery.kdbgen.commonTypesPackage
+import net.justmachinery.kdbgen.commonUuidFull
 import net.justmachinery.kdbgen.utility.Json
 import net.justmachinery.kdbgen.utility.onlyWhen
+import org.postgresql.geometric.*
 import org.postgresql.jdbc.PgConnection
+import org.postgresql.util.PGInterval
 import java.io.File
+import java.math.BigDecimal
 import java.nio.file.Paths
 import java.sql.DriverManager
+import java.sql.ResultSet
+import java.sql.Time
 import java.sql.Timestamp
 import java.util.*
 
-const val kdbGen = "net.justmachinery.kdbgen"
-const val commonTypesPackage = "$kdbGen.common"
-const val commonTimestamp = "CommonTimestamp"
-const val commonTimestampFull = "$commonTypesPackage.$commonTimestamp"
-const val commonUuid = "CommonUUID"
-const val commonUuidFull = "$commonTypesPackage.$commonUuid"
-const val defaultOutputDirectory = "build/generated-sources/kotlin"
-const val defaultEnumPackage = "net.justmachinery.kdbgen.enums"
-const val defaultDataPackage = "net.justmachinery.kdbgen.tables"
 
-class Settings(parser: ArgParser) {
-	val databaseUrl by parser.storing("URL of database to connect to (including user/pass)")
-	private val outputDirectory by parser.storing("Directory to output generated source files to").default(
-			defaultOutputDirectory)
-	private val dslOutputDirectory by parser.storing("Directory to output DSL helpers to, if different than output directory").default(
-			null)
-	val useCommonTypes by parser.flagging("Outputs common JS/JVM types instead of UUID/Timestamp.")
-	val enumPackage by parser.storing("Package to output enum classes to").default(defaultEnumPackage)
-	val dataPackage by parser.storing("Package to output beans and DSL to").default(defaultDataPackage)
-	val dataAnnotation by parser.adding("Fully qualified annotations to add to emitted data classes, for e.g. serialization")
-	val mutableData by parser.flagging("Whether to generate properties on data classes as var instead of val")
+
+data class Settings(
+	val databaseUrl : String,
+	val outputDirectory : String,
+	val dslOutputDirectory : String?,
+	val useCommonTypes : Boolean,
+	val enumPackage : String,
+	val dataPackage : String,
+	val dataAnnotation : List<String>,
+	val mutableData : Boolean
+) {
 
 	private fun directory(directory: String, `package`: String) = Paths.get(directory,
-			`package`.replace(".", "/")).toString()
+		`package`.replace(".", "/")).toString()
 
 	fun enumDirectory(): String = directory(outputDirectory, enumPackage)
 	fun dataDirectory(): String = directory(outputDirectory, dataPackage)
@@ -42,12 +39,7 @@ class Settings(parser: ArgParser) {
 	fun dslDirectory(): String = directory(dslOutputDirectory ?: outputDirectory, dataPackage)
 }
 
-fun main(args: Array<String>) {
-	val settings = Settings(ArgParser(args))
-	run(settings)
-}
-
-fun run(settings: Settings) {
+fun runGeneration(settings: Settings) {
 	File(settings.enumDirectory()).deleteRecursively()
 	File(settings.dataDirectory()).deleteRecursively()
 	File(settings.dslDirectory()).deleteRecursively()
@@ -70,6 +62,7 @@ fun run(settings: Settings) {
 
 
 private fun constructContext(settings : Settings) : RenderingContext {
+	DriverManager.registerDriver(org.postgresql.Driver())
 	val connection = DriverManager.getConnection(settings.databaseUrl, Properties()) as PgConnection
 
 	//Generate enum types from Postgres enums
@@ -103,9 +96,9 @@ private fun constructContext(settings : Settings) : RenderingContext {
 
 
 internal class RenderingContext(
-		val tables : List<PostgresTable>,
-		val settings: Settings,
-		enums: List<EnumType>) {
+	val tables : List<PostgresTable>,
+	val settings: Settings,
+	enums: List<EnumType>) {
 	internal val postgresTypeToEnum = enums.associateBy { it.postgresName }
 
 	internal val PostgresTableColumn.kotlinType
@@ -132,27 +125,36 @@ internal class RenderingContext(
 	private data class TypeRepr(val base : String, val nullable : Boolean, val params : List<TypeRepr>)
 	private fun mapPostgresType(postgresType: String, nullable: Boolean): TypeRepr {
 		val defaultType = when (postgresType) {
-			"bigint" -> Long::class
-			"int8" -> Long::class
-			"bigserial" -> Long::class
-			"boolean" -> Boolean::class
-			"bool" -> Boolean::class
-			"inet" -> String::class
-			"integer" -> Int::class
-			"int" -> Int::class
-			"int4" -> Int::class
-			"json" -> Json::class
-			"jsonb" -> Json::class
-			"text" -> String::class
-			"timestamp" -> if (!settings.useCommonTypes) Timestamp::class else null
+			//See TypeInfoCache in the Postgres driver implementation
+			"int", "smallint", "integer", "int2", "int4" -> Integer::class
+			"oid", "bigint", "int8", "bigserial", "serial8" -> Long::class
+			"float", "float4" -> Float::class
+			"money", "float8" -> Double::class
+			"decimal", "numeric" -> BigDecimal::class
+			"bit", "bool", "boolean" -> Boolean::class
+			"char", "bpchar", "varchar", "text", "name", "inet" -> String::class
+
+			"json", "jsonb" -> Json::class
+			"date" -> java.sql.Date::class
+			"time", "timetz" -> Time::class
+			"timestamp", "timestamptz" -> if (!settings.useCommonTypes) Timestamp::class else null
 			"uuid" -> if (!settings.useCommonTypes) UUID::class else null
 			"bytea" -> ByteArray::class
+			"refcursor" -> ResultSet::class
+			"point" -> PGpoint::class
+			"interval" -> PGInterval::class
+			"polygon" -> PGpolygon::class
+			"path" -> PGpath::class
+			"lseg" -> PGlseg::class
+			"line" -> PGline::class
+			"circle" -> PGcircle::class
+			"box" -> PGbox::class
 			else -> null
 		}
 		if (defaultType != null) {
 			return TypeRepr(defaultType.qualifiedName!!, nullable, emptyList())
 		}
-		if(postgresType == "timestamp"){
+		if(postgresType == "timestamp" || postgresType == "timestamptz"){
 			return TypeRepr(commonTimestampFull, nullable, emptyList())
 		}
 		if(postgresType == "uuid"){

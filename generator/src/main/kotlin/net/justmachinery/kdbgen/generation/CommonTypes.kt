@@ -1,5 +1,8 @@
 package net.justmachinery.kdbgen.generation
 
+import net.justmachinery.kdbgen.commonTimestamp
+import net.justmachinery.kdbgen.commonTypesPackage
+import net.justmachinery.kdbgen.commonUuid
 import java.io.File
 
 fun renderCommonTypes(settings : Settings){

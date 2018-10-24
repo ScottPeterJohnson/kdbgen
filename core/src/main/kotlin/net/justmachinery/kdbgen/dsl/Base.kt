@@ -1,8 +1,8 @@
 package net.justmachinery.kdbgen.dsl
 
+import net.justmachinery.kdbgen.commonTimestampFull
+import net.justmachinery.kdbgen.commonUuidFull
 import net.justmachinery.kdbgen.dsl.clauses.*
-import net.justmachinery.kdbgen.generation.commonTimestampFull
-import net.justmachinery.kdbgen.generation.commonUuidFull
 import net.justmachinery.kdbgen.utility.selectMapper
 import java.sql.Connection
 import java.sql.PreparedStatement

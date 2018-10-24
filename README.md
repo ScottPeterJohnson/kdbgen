@@ -13,41 +13,41 @@
   
 ## Use
 ### Install
+Make sure you have [kapt](https://kotlinlang.org/docs/reference/kapt.html) enabled.
+
 Add the following to your build.gradle where appropriate:
 ```groovy
 repositories {
-jcenter()
-maven { url 'https://dl.bintray.com/scottpjohnson/generic/' }
+    jcenter()
+    maven { url 'https://dl.bintray.com/scottpjohnson/generic/' }
 }
-task generatePostgresInterface(type : JavaExec){
-   classpath = sourceSets.main.compileClasspath
-   main = "net.justmachinery.kdbgen.generation.GeneratePostgresInterfaceKt"
-   args '--databaseUrl=jdbc:postgresql://localhost:5432/DATABASE?user=DATABASE_USER&password=DATABASE_PASSWORD'
-   args '--enumPackage=some.company.database.enums'
-   args '--tablePackage=some.company.database.tables'
-   args '--outputDirectory=build/generated-sources/kotlin'
-}
-compileKotlin.dependsOn('generatePostgresInterface')
-sourceSets {
-   main.kotlin.srcDirs += "build/generated-sources/kotlin"
-}
+
 dependencies {
-    compile 'net.justmachinery.kdbgen:kdbgen:<VERSION>'
+    compile 'net.justmachinery.kdbgen:kdbgen-core:<VERSION>'
+        kapt 'net.justmachinery.kdbgen:kdbgen-generator:<VERSION>'
 }
+```
+
+Add the following annotation anywhere in your project:
+```kotlin
+@GeneratePostgresInterface(
+	databaseUrl = "jdbc:postgresql://localhost:5432/DATABASE?user=DATABASE_USER&password=DATABASE_PASSWORD"
+)
+private class GeneratePostgres
 ```
 You will need to replace:
 - `DATABASE`, `DATABASE_USER`, `DATABASE_PASSWORD` with an accessible database/user/password (a local one, probably)
-- `some.company.database.enums` and `some.company.database.tables` with the packages to output generated classes to
-- Optional: `build/generated-sources/kotlin` with wherever your generated sources go
 - `<VERSION>` with the latest version of this repository
+
+Other configuration options are available on the GeneratePostgresInterface annotation.
 
 ### Multiplatform Kotlin
 To use this in a multiplatform Kotlin project (JS + JVM + Shared code), kdbgen should be a dependency of the JVM project, 
-the `--useCommonTypes` flag should be enabled if any of your columns are timestamps or UUIDs, the `--outputDirectory` should point to the shared project's generated sources,
-and `--dslDirectory` should be set to the JVM project's generated sources. 
+the `useCommonTypes` flag should be enabled if any of your columns are timestamps or UUIDs, the `--outputDirectory` should point to the shared project's generated sources,
+and `dslDirectory` should be set to the JVM project's generated sources. 
 
 ### Serialization
-Add a flag, e.g. `--dataAnnotation=kotlinx.serialization.Serializable`, to use generated classes with 
+Add `dataAnnotation=["kotlinx.serialization.Serializable"]`, to use generated classes with 
 with kotlinx-serialization.
 
 ### Basic examples

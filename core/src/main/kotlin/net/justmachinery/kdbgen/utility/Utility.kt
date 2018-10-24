@@ -1,12 +1,12 @@
 package net.justmachinery.kdbgen.utility
 
+import net.justmachinery.kdbgen.commonTimestampFull
+import net.justmachinery.kdbgen.commonUuidFull
 import net.justmachinery.kdbgen.dsl.SqlScope
 import net.justmachinery.kdbgen.dsl.clauses.DataClassSource
 import net.justmachinery.kdbgen.dsl.clauses.RawColumnSource
 import net.justmachinery.kdbgen.dsl.clauses.ResultTuple
 import net.justmachinery.kdbgen.dsl.clauses.SelectSource
-import net.justmachinery.kdbgen.generation.commonTimestampFull
-import net.justmachinery.kdbgen.generation.commonUuidFull
 import org.postgresql.jdbc.PgArray
 import org.postgresql.util.PGobject
 import java.sql.ResultSet
