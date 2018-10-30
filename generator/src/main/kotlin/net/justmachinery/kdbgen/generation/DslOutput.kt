@@ -180,10 +180,10 @@ internal class DslRenderer(
 					fun onConflictDoUpdate(
 						column : TableColumn<*>,
 						vararg columns : TableColumn<*>,
-						cb : UpdateStatementContext.(excluded : Columns)->Unit){
+						cb : ConflictUpdateBuilder.(excluded : Columns)->Unit){
 						val conflicts = ConflictUpdateBuilder()
 						cb(conflicts, aliased("excluded").columns)
-						addConflictClause(OnConflictClause(listOf(column).plus(columns), conflicts.updates))
+						addConflictClause(conflicts.build(listOf(column).plus(columns)))
 					}
 					""".trimIndent())
 			}

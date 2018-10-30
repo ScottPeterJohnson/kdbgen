@@ -2,10 +2,7 @@ package net.justmachinery.kdbgen.dsl
 
 import net.justmachinery.kdbgen.commonTimestampFull
 import net.justmachinery.kdbgen.commonUuidFull
-import net.justmachinery.kdbgen.dsl.clauses.ResultTuple
-import net.justmachinery.kdbgen.dsl.clauses.Selectable
-import net.justmachinery.kdbgen.dsl.clauses.SqlInsertValue
-import net.justmachinery.kdbgen.dsl.clauses.TypedExpression
+import net.justmachinery.kdbgen.dsl.clauses.*
 import net.justmachinery.kdbgen.utility.selectMapper
 import java.sql.Connection
 import java.sql.PreparedStatement
@@ -152,7 +149,7 @@ class SqlScope {
     internal data class AliasAndType(val alias : String, val type : KType)
     internal fun resolve(selectable : Selectable<*>) = selectableColumnResolution[selectable]!!
 
-	fun renderSelections(selects : List<Selectable<*>>) : List<RenderedSqlFragment> {
+	fun renderSelections(topmost : Boolean, selects : List<Selectable<*>>) : List<RenderedSqlFragment> {
 		val selectionInfo = selects
             .associateBy(
                 { it },
@@ -165,7 +162,7 @@ class SqlScope {
             .withIndex()
             .associateBy({it.value}, {"_${it.index}"})
 
-        selectableColumnResolution = selectionInfo
+        if(topmost) selectableColumnResolution = selectionInfo
             .mapValues { (_, values) ->
                 values.map {
                     AliasAndType(aliases[it.first]!!, it.second.type.type)
@@ -181,30 +178,67 @@ class SqlScope {
 
 private data class RenderedStatement(val sql : String, val parameters : List<Any?>, val scope : SqlScope)
 private fun <Result : ResultTuple> renderStatement(statement : StatementReturning<Result>, connection: Connection): RenderedStatement {
-	sanityCheckStatement(statement)
+	val scope = SqlScope()
+
+	val fragment = statementToFragment(statement, scope, true)
+
+	return RenderedStatement(fragment.sql, fragment.parameters.map { convertToParameterType(it, connection) }, scope)
+}
+
+internal fun statementToFragment(statement : StatementReturning<*>, scope : SqlScope, topmost : Boolean) : RenderedSqlFragment {
 	val builder = statement.builder
 	val selectValues = builder.selectValues
 	val insertValues = builder.insertValues
 	val updateValues = builder.updateValues
 	val tableName = builder.table.tableName
 
-	val scope = SqlScope()
+	sanityCheckStatement(statement)
+
 	scope.addTable(builder.table)
 	for(join in builder.joinTables){
 		scope.addTable(join)
 	}
 
+
 	val joins = builder.joinTables.joinToString(", "){ it.tableName }
 
 	val fragment = RenderedSqlFragment.build(scope) {
+
+		fun addWhereClauses(clauses : List<WhereClause> = builder.whereClauses){
+			if (clauses.isNotEmpty()) {
+				add(" WHERE ")
+				addJoined(" AND ", clauses.map { it.render(scope) })
+			}
+		}
+
+		fun addReturning(){
+			if (builder.operation() !== SqlOperation.SELECT && selectValues.isNotEmpty()) {
+				add(" RETURNING ")
+				addJoined(", ", scope.renderSelections(topmost, selectValues))
+			}
+		}
+
 		when(builder.operation()){
 			SqlOperation.SELECT -> {
 				add("SELECT ")
-				addJoined(", ", scope.renderSelections(selectValues))
+				addJoined(", ", scope.renderSelections(topmost, selectValues))
 				add(" FROM $tableName")
 				if(builder.joinTables.isNotEmpty()){
 					add(", ")
 					add(joins)
+				}
+
+				addWhereClauses()
+
+				if(builder.selectForUpdate){
+					add(" FOR UPDATE")
+				}
+				if(builder.selectSkipLocked){
+					add(" SKIP LOCKED")
+				}
+				if(builder.selectLimit != null){
+					add(" LIMIT ")
+					add(Expression.parameter(builder.selectLimit))
 				}
 			}
 			SqlOperation.INSERT -> {
@@ -229,17 +263,23 @@ private fun <Result : ResultTuple> renderStatement(statement : StatementReturnin
 				val conflictClause = builder.conflictClause
 				if(conflictClause != null){
 					add(" ON CONFLICT")
+					val excluded = builder.table.aliased("excluded")
+					scope.addTable(excluded)
 					if(conflictClause.columns.isNotEmpty()){
 						add("(${conflictClause.columns.joinToString(",") { it.name } })")
 					}
 					if(conflictClause.updates.isNotEmpty()){
 						add(" DO UPDATE SET ")
 						addJoined(", ", conflictClause.updates.map { it.render(scope) })
+						addWhereClauses(conflictClause.whereClauses)
 					} else {
 						add(" DO NOTHING")
 					}
+					scope.removeTable(excluded)
 
 				}
+
+				addReturning()
 			}
 			SqlOperation.UPDATE -> {
 				add("UPDATE $tableName SET ")
@@ -248,26 +288,28 @@ private fun <Result : ResultTuple> renderStatement(statement : StatementReturnin
 				if(builder.joinTables.isNotEmpty()){
 					add(" FROM $joins")
 				}
+
+				addWhereClauses()
+				addReturning()
 			}
 			SqlOperation.DELETE -> {
 				add("DELETE FROM $tableName")
 				if(builder.joinTables.isNotEmpty()){
 					add(" USING $joins")
 				}
-			}
-		}
 
-		if (builder.whereClauses.isNotEmpty()) {
-			add(" WHERE ")
-			addJoined(" AND ", builder.whereClauses.map { it.render(scope) })
-		}
-		if (builder.operation() !== SqlOperation.SELECT && selectValues.isNotEmpty()) {
-			add(" RETURNING ")
-			addJoined(", ", scope.renderSelections(selectValues))
+				addWhereClauses()
+				addReturning()
+			}
 		}
 	}
 
-	return RenderedStatement(fragment.sql, fragment.parameters.map { convertToParameterType(it, connection) }, scope)
+	scope.removeTable(builder.table)
+	for(join in builder.joinTables){
+		scope.removeTable(join)
+	}
+
+	return fragment
 }
 
 private fun sanityCheckStatement(statement : StatementReturning<*>){

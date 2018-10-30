@@ -8,8 +8,8 @@ import net.justmachinery.kdbgen.common.CommonTimestamp
 import net.justmachinery.kdbgen.common.CommonUUID
 import net.justmachinery.kdbgen.dsl.ConnectionProvider
 import net.justmachinery.kdbgen.dsl.clauses.Result2
-import net.justmachinery.kdbgen.dsl.clauses.join
 import net.justmachinery.kdbgen.dsl.parameter
+import net.justmachinery.kdbgen.dsl.subquery
 import net.justmachinery.kdbgen.test.generated.enums.EnumTypeTest
 import net.justmachinery.kdbgen.test.generated.tables.*
 import org.postgresql.jdbc.PgConnection
@@ -85,6 +85,34 @@ class BasicOperationsTest : DatabaseTest() {
 	}
 }
 
+class SubqueryTest : DatabaseTest() {
+	init {
+		"should be able to do a select/update lock query" {
+			sql {
+				usersTable.insert {
+					values(userName = "Bob")
+					returningNothing()
+				}.execute()
+				usersTable.update {
+					userId setTo parameter(3L)
+					where {
+						userName equalTo subquery(usersTable.select {
+							where {
+								userId equalTo parameter(1L)
+							}
+							forUpdate()
+							skipLocked()
+							limit(1)
+							returning(userName)
+						})
+					}
+					returning(`*`)
+				}.execute()
+			}
+		}
+	}
+}
+
 class UpsertTest : DatabaseTest() {
 	init {
 		"should be able to do a basic upsert" {
@@ -100,6 +128,23 @@ class UpsertTest : DatabaseTest() {
 					returningNothing()
 				}.execute()
 
+				usersTable.select {
+					returning(`*`)
+				}.value() shouldBe user2
+
+				//Where clause limits insert
+				usersTable.insert {
+					values(user)
+					onConflictDoUpdate(userId) { excluded ->
+						emailAddress setTo excluded.emailAddress
+						where {
+							emailAddress notEqualTo parameter(user2.emailAddress)
+						}
+					}
+					returningNothing()
+				}.execute()
+
+				//Should still be user2
 				usersTable.select {
 					returning(`*`)
 				}.value() shouldBe user2

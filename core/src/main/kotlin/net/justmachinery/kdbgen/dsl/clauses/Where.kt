@@ -1,10 +1,12 @@
 package net.justmachinery.kdbgen.dsl.clauses
 
-import net.justmachinery.kdbgen.dsl.*
+import net.justmachinery.kdbgen.dsl.Expression
+import net.justmachinery.kdbgen.dsl.RenderedSqlFragment
+import net.justmachinery.kdbgen.dsl.SqlScope
+import net.justmachinery.kdbgen.dsl.TableColumn
 
 
 interface CanHaveWhereStatement {
-	fun addJoinTable(table : Table<*>)
 	fun <Value, V2 : Value> addWhereClause(left : Expression<Value>, op : String, right : Expression<in V2>)
 
 
@@ -28,7 +30,7 @@ class WhereInit(private val builder : CanHaveWhereStatement) {
 	}
 }
 
-internal data class WhereClause(val left : Expression<*>, val op : String, val right : Expression<*>) {
+data class WhereClause(val left : Expression<*>, val op : String, val right : Expression<*>) {
 	fun render(scope : SqlScope) : RenderedSqlFragment {
 		return RenderedSqlFragment.build(scope) {
 			add(left)

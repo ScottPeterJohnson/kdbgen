@@ -57,4 +57,8 @@ interface CanHaveReturningValue {
 	fun <V1, V2, V3, V4> returning(first: Selectable<V1>, second: Selectable<V2>, third : Selectable<V3>, fourth : Selectable<V4>): ReturnValues<Result4<V1, V2, V3, V4>> = returningValues(first,second,third,fourth) as ReturnValues<Result4<V1, V2, V3, V4>>
 }
 
-interface SelectStatementBuilder : CanHaveReturningValue, CanHaveWhereStatement, SqlDslBase
+interface SelectStatementBuilder : CanHaveReturningValue, CanHaveWhereStatement, CanHaveJoins, SqlDslBase {
+	fun limit(amount : Long)
+	fun skipLocked()
+	fun forUpdate()
+}

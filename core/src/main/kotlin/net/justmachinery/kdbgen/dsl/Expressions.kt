@@ -1,5 +1,6 @@
 package net.justmachinery.kdbgen.dsl
 
+import net.justmachinery.kdbgen.dsl.clauses.Result1
 import uy.klutter.reflect.reifiedKType
 import kotlin.reflect.KType
 
@@ -80,6 +81,20 @@ data class SqlParameter<T>(val value : T, val type : KType, val postgresType : P
             "CAST (? AS ${postgresType.rawType})"
         } else {
             "?"
+        }
+    }
+}
+
+fun <V> subquery(query : StatementReturning<Result1<V>>) : Expression<V> {
+    return SubqueryExpression(query)
+}
+
+data class SubqueryExpression<T>(val query : StatementReturning<Result1<T>>) : Expression<T> {
+    override fun render(scope: SqlScope): RenderedSqlFragment {
+        return RenderedSqlFragment.build(scope) {
+            add("(")
+            add(statementToFragment(query, scope, topmost = false))
+            add(")")
         }
     }
 }

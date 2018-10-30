@@ -8,6 +8,10 @@ data class StatementBuilder (
 	val table : Table<*>
 ) : UpdateStatementBuilder, SelectStatementBuilder, InsertStatementBuilder, DeleteStatementBuilder {
 	internal val selectValues : MutableList<Selectable<*>> = mutableListOf()
+	internal var selectForUpdate : Boolean = false
+	internal var selectSkipLocked : Boolean = false
+	internal var selectLimit : Long? = null
+
 	internal val updateValues: MutableList<SqlUpdateValue> = mutableListOf()
 	internal val insertValues : MutableList<List<SqlInsertValue<*>>> = mutableListOf()
 	internal var conflictClause: OnConflictClause? = null
@@ -36,6 +40,18 @@ data class StatementBuilder (
 	}
 	override fun addReturningValue(source : Selectable<*>){
 		selectValues.add(source)
+	}
+
+	override fun limit(amount: Long) {
+		selectLimit = amount
+	}
+
+	override fun skipLocked() {
+		selectSkipLocked = true
+	}
+
+	override fun forUpdate() {
+		selectForUpdate = true
 	}
 
 	internal fun operation() : SqlOperation {

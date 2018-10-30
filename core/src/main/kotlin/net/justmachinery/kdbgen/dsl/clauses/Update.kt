@@ -2,7 +2,7 @@ package net.justmachinery.kdbgen.dsl.clauses
 
 import net.justmachinery.kdbgen.dsl.*
 
-interface UpdateStatementBuilder : CanHaveReturningValue, CanHaveWhereStatement, UpdateStatementContext
+interface UpdateStatementBuilder : CanHaveReturningValue, CanHaveWhereStatement, CanHaveJoins, UpdateStatementContext
 
 interface UpdateStatementContext : SqlDslBase {
 	fun <V> addUpdateValue(left : TableColumn<V>, right : Expression<out V>)

@@ -13,14 +13,29 @@ data class SqlInsertValue<T>(val column : TableColumn<T>, val value : Expression
 
 
 fun InsertStatementBuilder.onConflictDoNothing(vararg columns : TableColumn<*>){
-	addConflictClause(OnConflictClause(columns.toList(), emptyList()))
+	addConflictClause(OnConflictClause(columns.toList(), emptyList(), emptyList()))
 }
 
-data class OnConflictClause(val columns : List<TableColumn<*>>, val updates : List<SqlUpdateValue>)
+data class OnConflictClause(
+	val columns : List<TableColumn<*>>,
+	val updates : List<SqlUpdateValue>,
+	val whereClauses : List<WhereClause>
+)
 
 
-data class ConflictUpdateBuilder(val updates : MutableList<SqlUpdateValue> = mutableListOf()) : UpdateStatementContext {
+class ConflictUpdateBuilder : UpdateStatementContext, CanHaveWhereStatement {
+	private val updates= mutableListOf<SqlUpdateValue>()
+	private val whereClauses = mutableListOf<WhereClause>()
+
+	override fun <Value, V2 : Value> addWhereClause(left: Expression<Value>, op: String, right: Expression<in V2>) {
+		whereClauses.add(WhereClause(left, op, right))
+	}
+
 	override fun <V> addUpdateValue(left: TableColumn<V>, right: Expression<out V>) {
 		updates.add(SqlUpdateValue(left, right))
+	}
+
+	fun build(columns : List<TableColumn<*>>) : OnConflictClause {
+		return OnConflictClause(columns, updates, whereClauses)
 	}
 }
