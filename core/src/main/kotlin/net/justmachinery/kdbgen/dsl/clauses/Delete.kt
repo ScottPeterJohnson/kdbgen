@@ -1,4 +1,5 @@
 package net.justmachinery.kdbgen.dsl.clauses
 
-interface DeleteStatementBuilder : ReturningStatementBuilder, WhereStatementBuilder {
-}
+import net.justmachinery.kdbgen.dsl.SqlDslBase
+
+interface DeleteStatementBuilder : CanHaveReturningValue, CanHaveWhereStatement, SqlDslBase

@@ -1,5 +1,6 @@
 import com.jfrog.bintray.gradle.BintrayExtension
 import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import java.util.Date
 import java.net.URI
 
@@ -22,8 +23,10 @@ plugins {
 }
 
 allprojects {
-	version = "0.5.1"
+	version = "0.6.0"
 	group = "net.justmachinery.kdbgen"
+
+
 	repositories {
 		mavenCentral()
 		jcenter()
@@ -82,6 +85,14 @@ subprojects {
 }
 
 allprojects {
+	val compileKotlin : KotlinCompile by tasks
+	compileKotlin.kotlinOptions {
+		jvmTarget = JavaVersion.VERSION_1_8.toString()
+	}
+	val compileTestKotlin : KotlinCompile by tasks
+	compileTestKotlin.kotlinOptions {
+		jvmTarget = JavaVersion.VERSION_1_8.toString()
+	}
 	dependencies {
 		compile("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.2.61")
 	}

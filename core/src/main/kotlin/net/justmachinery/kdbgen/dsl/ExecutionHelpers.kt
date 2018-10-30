@@ -19,13 +19,13 @@ interface ConnectionProvider {
 	fun <V : ResultTuple> StatementReturning<V>.singleOrNull() : V? {
 		return executeStatementReturning(this, getConnection()).firstOrNull()
 	}
-	fun <V : Any?> StatementReturning<Result1<V>>.value() : V {
+	fun <V> StatementReturning<Result1<V>>.value() : V {
 		return executeStatementReturning(this, getConnection()).first().first
 	}
-	fun <V : Any?> StatementReturning<Result1<V>>.valueOrNull() : V? {
+	fun <V> StatementReturning<Result1<V>>.valueOrNull() : V? {
 		return executeStatementReturning(this, getConnection()).firstOrNull()?.first
 	}
-	fun <V : Any?> StatementReturning<Result1<V>>.values() : List<V> {
+	fun <V> StatementReturning<Result1<V>>.values() : List<V> {
 		return executeStatementReturning(this, getConnection()).map { it.first }
 	}
 }

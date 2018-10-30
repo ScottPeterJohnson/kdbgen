@@ -1,7 +1,13 @@
+CREATE TABLE addresses (
+  address_id BIGSERIAL PRIMARY KEY,
+  state TEXT NOT NULL
+);
+
 CREATE TABLE users (
 	user_id BIGSERIAL PRIMARY KEY,
 	user_name TEXT NOT NULL,
-	email_address TEXT NULL
+	email_address TEXT NULL,
+	address_id BIGINT NULL REFERENCES addresses(address_id)
 );
 
 CREATE TABLE array_test (

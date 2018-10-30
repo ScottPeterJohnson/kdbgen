@@ -120,7 +120,7 @@ internal class DslRenderer(
 				}
 				line("""
 					override val `*` = DataClassSource(
-						listOf(${type.postgresTableColumns.joinToString(", ") { it.memberName + ".selectSource" }})
+						listOf(${type.postgresTableColumns.joinToString(", ") { it.memberName }})
 					) {
 						$rowName(${
 				type.postgresTableColumns.mapIndexed { index, it ->
@@ -150,7 +150,7 @@ internal class DslRenderer(
 					"${it.memberName} : ${context.run { it.kotlinType }}${if (it.defaultable) "${"?".onlyWhen(!it.nullable)} = null" else ""}"
 				}
 				val valuesConstruction = type.postgresTableColumns.joinToString("\n") {
-					val insertValue = "values.add(SqlInsertValue(this.${it.memberName}, ${it.memberName}))"
+					val insertValue = "values.add(this.${it.memberName}.insertValue(${it.memberName}))"
 					if (it.defaultable) {
 						"""
 						if(${it.memberName} != null) {
@@ -172,7 +172,7 @@ internal class DslRenderer(
 
 				line("fun values(row : $rowName) {")
 				indent {
-					line("addInsertValues(listOf(${type.postgresTableColumns.joinToString(", ") { "SqlInsertValue(this.${it.memberName}, row.${it.memberName})" } }))")
+					line("addInsertValues(listOf(${type.postgresTableColumns.joinToString(", ") { "this.${it.memberName}.insertValue(row.${it.memberName})" } }))")
 				}
 				line("}")
 

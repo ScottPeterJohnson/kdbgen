@@ -1,35 +1,39 @@
 package net.justmachinery.kdbgen.dsl.clauses
 
-import net.justmachinery.kdbgen.dsl.SqlClauseValue
-import net.justmachinery.kdbgen.dsl.Table
-import net.justmachinery.kdbgen.dsl.TableColumn
+import net.justmachinery.kdbgen.dsl.*
 
-interface WhereStatementBuilder {
+
+interface CanHaveWhereStatement {
 	fun addJoinTable(table : Table<*>)
-	fun <T> addWhereClause(left : SqlClauseValue<T>, op : String, right : SqlClauseValue<T>)
+	fun <Value, V2 : Value> addWhereClause(left : Expression<Value>, op : String, right : Expression<in V2>)
+
 
 	fun where(where : WhereInit.()->Unit) {
 		where(WhereInit(this))
 	}
 }
-
-class WhereInit(private val builder : WhereStatementBuilder) {
-	private fun <Value> TableColumn<Value>.opClause(op : String, value : Value){
-		builder.addWhereClause(SqlClauseValue.Column(this), op, SqlClauseValue.Value(value, this.type))
-	}
-	private fun <Value> TableColumn<Value>.colClause(op : String, column : TableColumn<Value>){
-		builder.addWhereClause(SqlClauseValue.Column(this), op, SqlClauseValue.Column(column))
+class WhereInit(private val builder : CanHaveWhereStatement) {
+	fun <Value, V2 : Value> Expression<Value>.op(op : String, value : Expression<in V2>){
+		builder.addWhereClause(this, op, value)
 	}
 
-	infix fun <Value> TableColumn<Value>.equalTo(column : TableColumn<Value>) = colClause("=", column)
-	infix fun <Value> TableColumn<Value>.equalTo(value : Value) = opClause("=", value)
-	infix fun <Value> TableColumn<Value>.notEqualTo(value : Value) = opClause("!=", value)
-	infix fun <Value> TableColumn<Value>.greaterThan(value : Value) = opClause(">", value)
-	infix fun <Value> TableColumn<Value>.greaterThanOrEqualTo(value : Value) = opClause(">=", value)
-	infix fun <Value> TableColumn<Value>.lessThan(value : Value) = opClause("<", value)
-	infix fun <Value> TableColumn<Value>.lessThanOrEqualTo(value : Value) = opClause("<=", value)
-	infix fun <Value> TableColumn<Value>.within(values : List<Value>) = builder.addWhereClause(
-			SqlClauseValue.Column(this),
-			"=",
-			SqlClauseValue.FunctionCall("ANY", listOf(SqlClauseValue.Value(values, this.type.toArray()))))
+	infix fun <Value, V2 : Value> Expression<Value>.equalTo(value : Expression<in V2>) = op("=", value)
+	infix fun <Value, V2 : Value> Expression<Value>.notEqualTo(value : Expression<in V2>) = op("!=", value)
+	infix fun <Value, V2 : Value> Expression<Value>.greaterThan(value : Expression<in V2>) = op(">", value)
+	infix fun <Value, V2 : Value> Expression<Value>.greaterThanOrEqualTo(value : Expression<in V2>) = op(">=", value)
+	infix fun <Value, V2 : Value> Expression<Value>.lessThan(value : Expression<in V2>) = op("<", value)
+	infix fun <Value, V2 : Value> Expression<Value>.lessThanOrEqualTo(value : Expression<in V2>) = op("<=", value)
+	inline infix fun <Value, reified V2 : Value> TableColumn<Value>.within(values : List<V2>) {
+		op("=", Expression.callFunction<Value>("ANY", Expression.parameter(values, this.type)))
+	}
+}
+
+internal data class WhereClause(val left : Expression<*>, val op : String, val right : Expression<*>) {
+	fun render(scope : SqlScope) : RenderedSqlFragment {
+		return RenderedSqlFragment.build(scope) {
+			add(left)
+			add(" $op ")
+			add(right)
+		}
+	}
 }

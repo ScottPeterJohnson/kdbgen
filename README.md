@@ -42,7 +42,7 @@ You will need to replace:
 Other configuration options are available on the GeneratePostgresInterface annotation.
 
 ### Multiplatform Kotlin
-To use this in a multiplatform Kotlin project (JS + JVM + Shared code), kdbgen should be a dependency of the JVM project, 
+To use the generated convenience row types in a multiplatform Kotlin project (JS + JVM + Shared code), kdbgen should be a dependency of the JVM project, 
 the `useCommonTypes` flag should be enabled if any of your columns are timestamps or UUIDs, the `--outputDirectory` should point to the shared project's generated sources,
 and `dslDirectory` should be set to the JVM project's generated sources. 
 
@@ -52,14 +52,14 @@ with kotlinx-serialization.
 
 ### Basic examples
 
- Assume a basic users table with mandatory "uid", "email", and optional "name" fields.
+ Assume a basic users table with mandatory "uid", "email_address", and optional "name" fields.
  
 #### Setup
 ```kotlin
 //Any method of getting a connection will suffice. Using basic JDBC:
 val connection = DriverManager.getConnection(DATABASE_URL, Properties()) as PgConnection
 //A basic wrapper for obtaining a connection, whether through threadpool or just reusing the same connection
-val connectionProvider = object : ConnectionProvider() {
+val connectionProvider = object : ConnectionProvider {
     override fun getConnection(): Connection {
         return connection
     }
@@ -73,22 +73,22 @@ fun sql(cb : ConnectionProvider.()->Unit){
 #### Select user
 ```kotlin
 sql {
-    //Find the user with uid "test". This will return a convenience data class containing all columns.
+    //Find the user named "test". This will return a convenience data class containing all columns.
     usersTable.select {
         where {
-            uid equalTo "test"
+            userName equalTo parameter("test")
         }
         returning(`*`)
     }.value()
-    
+
     //Find the emails of all users named "John Smith". This will return just the email column.
-    val email = usersTable.select { 
-        where { name equalTo "John Smith" }
-        returning(email)
+    val email = usersTable.select {
+        where { userName equalTo parameter("John Smith") }
+        returning(emailAddress)
     }.values()
-    
+
     //Both email and user ID, wrapped in a tuple like structure.
-    val results = usersTable.select { returning(uid, email) }.list()
+    val results = usersTable.select { returning(userId, emailAddress) }.list()
     results.map { it.first } //UID
     results.map { it.second } //Email
 }
@@ -96,20 +96,21 @@ sql {
 
 #### Insert user
 ```kotlin
-sql { //Brings connection provider into scope
-    usersTable.insert { 
+sql {
+    usersTable.insert {
         //Since "name" is optional, we don't have to provide it as an argument to this insert helper method.
-        values(uid = "test", email = "foo@bar")
-        returningNothing()    
+        values(userName = "test", emailAddress = "foo@bar")
+        returningNothing()
     }.execute()
-        
+
     //Add multiple users:
     val users = listOf("test", "test2", "test3")
     usersTable.insert {
         //Can insert using the convenience row class
-        values(UsersRow(uid = "test0", email = "foo@bar.org"))
-        for(user in users){
-            values(uid = user, email = "$user@test.org")
+        //(Generated values must be supplied if manually constructed)
+        values(UsersRow(userName = "test0", emailAddress = "foo@bar.org", userId = 2, addressId = null))
+        for (user in users) {
+            values(userName = user, emailAddress = "$user@test.org")
         }
         returningNothing()
     }.execute()
@@ -119,12 +120,13 @@ sql { //Brings connection provider into scope
 #### Update user
 ```kotlin
 sql {
+
     usersTable.update {
-        name setTo "Joe Smith"
+        userName setTo parameter("Joe Smith")
         where {
-            name equalTo "test"
+            userName equalTo parameter("test")
         }
-        returning(uid)
+        returning(userId)
     }.values()
 }
 ```
@@ -132,9 +134,10 @@ sql {
 #### Delete user
 ```kotlin
 sql {
+
     usersTable.delete {
         where {
-            name equalTo "test"
+            userName equalTo parameter("test")
         }
         returningNothing()
     }.execute()
@@ -143,28 +146,33 @@ sql {
 
 #### Join tables
 ```kotlin
-usersTable.select {
-    val addresses = join(addressTable)
-    where {
-        name equalTo "test"
-        //The join condition
-        addressId equalTo address.id
-        addresses.state equalTo "CA"
-    }
-    returning(`*`)
-}.list()
+sql {
 
+    usersTable.select {
+        val addresses = join(addressesTable)
+        where {
+            userName equalTo parameter("test")
+            //The join condition
+            addressId equalTo addresses.addressId
+            addresses.state equalTo parameter("CA")
+        }
+        returning(`*`)
+    }.list()
+
+}
 ```
 
 #### Upsert / Conflict Clause
 ```kotlin
-usersTable.insert {
-    values(userId = 3, name = "John Smith", email = "foo@bar.com")
-    //Currently only supports column inferred constraints
-    onConflictDoUpdate(userId){ excluded ->
-        email setTo excluded.email
+sql {
+    usersTable.insert {
+        values(userName = "John Smith", emailAddress = "foo@bar.com")
+        //Currently only supports column inferred constraints
+        onConflictDoUpdate(userName){ excluded ->
+            emailAddress setTo excluded.emailAddress
+        }
+        returningNothing()
     }
-    returningNothing()
 }
 
 ```

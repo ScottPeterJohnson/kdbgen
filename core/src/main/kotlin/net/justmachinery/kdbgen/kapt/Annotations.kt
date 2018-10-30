@@ -1,8 +1,5 @@
 package net.justmachinery.kdbgen.kapt
 
-import net.justmachinery.kdbgen.defaultDataPackage
-import net.justmachinery.kdbgen.defaultEnumPackage
-
 @Target(AnnotationTarget.CLASS)
 @Retention(AnnotationRetention.SOURCE)
 annotation class GeneratePostgresInterface(
@@ -26,11 +23,11 @@ annotation class GeneratePostgresInterface(
     /**
      * Package to output enum classes to
      */
-    val enumPackage : String = defaultEnumPackage,
+    val enumPackage : String = "net.justmachinery.kdbgen.enums",
     /**
      * Package to output beans and DSL to
      */
-    val dataPackage : String = defaultDataPackage,
+    val dataPackage : String = "net.justmachinery.kdbgen.tables",
     /**
      * Fully qualified annotations to add to emitted data classes, for e.g. serialization
      * Note that kapt only has one round, so annotations that themselves generate sources won't have an effect

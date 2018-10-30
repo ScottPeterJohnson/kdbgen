@@ -6,10 +6,16 @@ import io.kotlintest.shouldBe
 import io.kotlintest.shouldNot
 import net.justmachinery.kdbgen.common.CommonTimestamp
 import net.justmachinery.kdbgen.common.CommonUUID
+import net.justmachinery.kdbgen.dsl.ConnectionProvider
 import net.justmachinery.kdbgen.dsl.clauses.Result2
 import net.justmachinery.kdbgen.dsl.clauses.join
+import net.justmachinery.kdbgen.dsl.parameter
 import net.justmachinery.kdbgen.test.generated.enums.EnumTypeTest
 import net.justmachinery.kdbgen.test.generated.tables.*
+import org.postgresql.jdbc.PgConnection
+import java.sql.Connection
+import java.sql.DriverManager
+import java.util.*
 
 
 class BasicOperationsTest : DatabaseTest() {
@@ -23,16 +29,22 @@ class BasicOperationsTest : DatabaseTest() {
 					}.execute()
 					select{
 						where {
-							userName equalTo "Bob"
+							userName equalTo parameter("Bob")
 						}
 						returning(`*`)
 					}.values() shouldNot beEmpty()
 					update {
-						userName setTo "Joe"
+						userName setTo parameter("Joe")
+						where {
+							userName equalTo parameter("Bob")
+						}
 						returning(userName)
 					}.value() shouldBe "Joe"
 
 					val deletedEmailAddress = delete {
+						where {
+							userName equalTo parameter("Joe")
+						}
 						returning(emailAddress)
 					}.value()
 					deletedEmailAddress shouldBe null
@@ -58,7 +70,7 @@ class BasicOperationsTest : DatabaseTest() {
 		"should be able to do a basic join" {
 			sql {
 				val enum = EnumTestRow(1, EnumTypeTest.test2)
-				val user = UsersRow(1, null, "foo@bar.com")
+				val user = UsersRow(userId = 1, userName = "foo", emailAddress = "foo@bar.com", addressId = null)
 				usersTable.insert { values(user); returningNothing() }.execute()
 				enumTestTable.insert { values(enum); returningNothing() }.execute()
 				usersTable.select {
@@ -77,7 +89,7 @@ class UpsertTest : DatabaseTest() {
 	init {
 		"should be able to do a basic upsert" {
 			sql {
-				val user = UsersRow(1, null, "foo@bar.com")
+				val user = UsersRow(1, "test", "foo@bar.com", addressId = null)
 				usersTable.insert { values(user); returningNothing() }.execute()
 				val user2 = user.copy(emailAddress = "baz@bing.com")
 				usersTable.insert {
@@ -149,6 +161,110 @@ class CommonTypeTest : DatabaseTest() {
 				returned.uuid shouldBe uuid
 				returned.timestamp shouldBe timestamp
 			}
+		}
+	}
+}
+
+fun docTest(){
+	val DATABASE_URL = "test"
+
+	//Any method of getting a connection will suffice. Using basic JDBC:
+	val connection = DriverManager.getConnection(DATABASE_URL, Properties()) as PgConnection
+	//A basic wrapper for obtaining a connection, whether through threadpool or just reusing the same connection
+	val connectionProvider = object : ConnectionProvider {
+		override fun getConnection(): Connection {
+			return connection
+		}
+	}
+	//This will let us write nice DSL
+	fun sql(cb : ConnectionProvider.()->Unit){
+		cb(connectionProvider)
+	}
+	sql {
+		//Find the user named "test". This will return a convenience data class containing all columns.
+		usersTable.select {
+			where {
+				userName equalTo parameter("test")
+			}
+			returning(`*`)
+		}.value()
+
+		//Find the emails of all users named "John Smith". This will return just the email column.
+		val email = usersTable.select {
+			where { userName equalTo parameter("John Smith") }
+			returning(emailAddress)
+		}.values()
+
+		//Both email and user ID, wrapped in a tuple like structure.
+		val results = usersTable.select { returning(userId, emailAddress) }.list()
+		results.map { it.first } //UID
+		results.map { it.second } //Email
+	}
+	sql {
+
+		usersTable.insert {
+			//Since "name" is optional, we don't have to provide it as an argument to this insert helper method.
+			values(userName = "test", emailAddress = "foo@bar")
+			returningNothing()
+		}.execute()
+
+		//Add multiple users:
+		val users = listOf("test", "test2", "test3")
+		usersTable.insert {
+			//Can insert using the convenience row class
+			//(Generated values must be supplied if manually constructed)
+			values(UsersRow(userName = "test0", emailAddress = "foo@bar.org", userId = 2, addressId = null))
+			for (user in users) {
+				values(userName = user, emailAddress = "$user@test.org")
+			}
+			returningNothing()
+		}.execute()
+	}
+
+	sql {
+
+		usersTable.update {
+			userName setTo parameter("Joe Smith")
+			where {
+				userName equalTo parameter("test")
+			}
+			returning(userId)
+		}.values()
+	}
+
+	sql {
+
+		usersTable.delete {
+			where {
+				userName equalTo parameter("test")
+			}
+			returningNothing()
+		}.execute()
+	}
+
+	sql {
+
+		usersTable.select {
+			val addresses = join(addressesTable)
+			where {
+				userName equalTo parameter("test")
+				//The join condition
+				addressId equalTo addresses.addressId
+				addresses.state equalTo parameter("CA")
+			}
+			returning(`*`)
+		}.list()
+
+	}
+
+	sql {
+		usersTable.insert {
+			values(userName = "John Smith", emailAddress = "foo@bar.com")
+			//Currently only supports column inferred constraints
+			onConflictDoUpdate(userName){ excluded ->
+				emailAddress setTo excluded.emailAddress
+			}
+			returningNothing()
 		}
 	}
 }

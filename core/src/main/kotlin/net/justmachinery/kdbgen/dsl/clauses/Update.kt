@@ -1,18 +1,22 @@
 package net.justmachinery.kdbgen.dsl.clauses
 
-import net.justmachinery.kdbgen.dsl.SqlClauseValue
-import net.justmachinery.kdbgen.dsl.TableColumn
+import net.justmachinery.kdbgen.dsl.*
 
-interface UpdateStatementBuilder : ReturningStatementBuilder, WhereStatementBuilder, UpdateStatementContext {
+interface UpdateStatementBuilder : CanHaveReturningValue, CanHaveWhereStatement, UpdateStatementContext
+
+interface UpdateStatementContext : SqlDslBase {
+	fun <V> addUpdateValue(left : TableColumn<V>, right : Expression<out V>)
+
+	infix fun <V> TableColumn<V>.setTo(other : Expression<out V>){
+		addUpdateValue(this, other)
+	}
 }
 
-interface UpdateStatementContext {
-	fun <T> addUpdateValue(left : TableColumn<T>, right : SqlClauseValue<T>)
-
-	infix fun <V> TableColumn<V>.setTo(value : V){
-		addUpdateValue(this, SqlClauseValue.Value(value, this.type))
-	}
-	infix fun <V> TableColumn<V>.setTo(other : TableColumn<V>){
-		addUpdateValue(this, SqlClauseValue.Column(other))
+data class SqlUpdateValue(val left : TableColumn<*>, val right : Expression<*>) {
+	fun render(scope : SqlScope) : RenderedSqlFragment {
+		return RenderedSqlFragment.build(scope) {
+			add(left.name + " = ")
+			add(right)
+		}
 	}
 }
