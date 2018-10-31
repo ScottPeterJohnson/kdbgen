@@ -45,8 +45,22 @@ interface Expression<T> {
             @Suppress("DEPRECATION")
             return SqlParameter(value, reifiedKType<T>(), postgresType)
         }
+
         fun <T> callFunction(name : String, vararg values : Expression<*>) : Expression<T> {
             return FunctionCallExpression(name, values.toList())
+        }
+        fun <T> callOperator(name : String, vararg values : Expression<*>) : Expression<T> {
+            return OperatorExpression(name, values.toList())
+        }
+    }
+}
+
+internal data class OperatorExpression<T>(val name : String, val values : List<Expression<*>>) : Expression<T> {
+    override fun render(scope: SqlScope): RenderedSqlFragment {
+        return RenderedSqlFragment.build(scope){
+            add("(")
+            addJoinedExprs(name, values)
+            add(")")
         }
     }
 }

@@ -10,6 +10,7 @@ import net.justmachinery.kdbgen.dsl.ConnectionProvider
 import net.justmachinery.kdbgen.dsl.clauses.Result1
 import net.justmachinery.kdbgen.dsl.clauses.Result2
 import net.justmachinery.kdbgen.dsl.parameter
+import net.justmachinery.kdbgen.dsl.plus
 import net.justmachinery.kdbgen.dsl.subquery
 import net.justmachinery.kdbgen.test.generated.enums.EnumTypeTest
 import net.justmachinery.kdbgen.test.generated.tables.*
@@ -108,6 +109,16 @@ class BasicOperationsTest : DatabaseTest() {
 					}
 					returning(userName)
 				}.list() shouldBe listOf()
+			}
+		}
+		"basic addition" {
+			sql {
+				usersTable.select {
+					where {
+						userId equalTo parameter(1L) + parameter(1L)
+					}
+					returningNothing()
+				}.execute()
 			}
 		}
 	}
