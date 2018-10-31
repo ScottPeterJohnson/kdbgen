@@ -27,8 +27,8 @@ class ConflictUpdateBuilder : UpdateStatementContext, CanHaveWhereStatement {
 	private val updates= mutableListOf<SqlUpdateValue>()
 	private val whereClauses = mutableListOf<WhereClause>()
 
-	override fun <Value, V2 : Value> addWhereClause(left: Expression<Value>, op: String, right: Expression<in V2>) {
-		whereClauses.add(WhereClause(left, op, right))
+	override fun addWhereClause(clause : WhereClause) {
+		whereClauses.add(clause)
 	}
 
 	override fun <V> addUpdateValue(left: TableColumn<V>, right: Expression<out V>) {

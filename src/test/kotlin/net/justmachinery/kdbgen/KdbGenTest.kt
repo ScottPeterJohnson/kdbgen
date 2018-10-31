@@ -7,6 +7,7 @@ import io.kotlintest.shouldNot
 import net.justmachinery.kdbgen.common.CommonTimestamp
 import net.justmachinery.kdbgen.common.CommonUUID
 import net.justmachinery.kdbgen.dsl.ConnectionProvider
+import net.justmachinery.kdbgen.dsl.clauses.Result1
 import net.justmachinery.kdbgen.dsl.clauses.Result2
 import net.justmachinery.kdbgen.dsl.parameter
 import net.justmachinery.kdbgen.dsl.subquery
@@ -80,6 +81,33 @@ class BasicOperationsTest : DatabaseTest() {
 					}
 					returning(`*`, enumTest.`*`)
 				}.single() shouldBe Result2(user, enum)
+			}
+		}
+
+		"and/or subexpressions should work" {
+			sql {
+				usersTable.insert {
+					values(userName = "Bob")
+					returningNothing()
+				}.execute()
+				usersTable.select {
+					where {
+						anyOf {
+							userName equalTo parameter("Joe")
+							userName equalTo parameter("Bob")
+						}
+					}
+					returning(userName)
+				}.single() shouldBe Result1("Bob")
+				usersTable.select {
+					where {
+						allOf {
+							userName equalTo parameter("Joe")
+							userName equalTo parameter("Bob")
+						}
+					}
+					returning(userName)
+				}.list() shouldBe listOf()
 			}
 		}
 	}

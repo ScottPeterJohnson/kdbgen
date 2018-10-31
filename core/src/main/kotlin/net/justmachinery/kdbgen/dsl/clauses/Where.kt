@@ -7,16 +7,24 @@ import net.justmachinery.kdbgen.dsl.TableColumn
 
 
 interface CanHaveWhereStatement {
-	fun <Value, V2 : Value> addWhereClause(left : Expression<Value>, op : String, right : Expression<in V2>)
+	fun addWhereClause(clause : WhereClause)
 
 
 	fun where(where : WhereInit.()->Unit) {
 		where(WhereInit(this))
 	}
 }
+
+private class WhereStatementBuilder : CanHaveWhereStatement {
+	val clauses = mutableListOf<WhereClause>()
+	override fun addWhereClause(clause: WhereClause) {
+		clauses.add(clause)
+	}
+}
+
 class WhereInit(private val builder : CanHaveWhereStatement) {
 	fun <Value, V2 : Value> Expression<Value>.op(op : String, value : Expression<in V2>){
-		builder.addWhereClause(this, op, value)
+		builder.addWhereClause(OpWhereClause(this, op, value))
 	}
 
 	infix fun <Value, V2 : Value> Expression<Value>.equalTo(value : Expression<in V2>) = op("=", value)
@@ -28,14 +36,35 @@ class WhereInit(private val builder : CanHaveWhereStatement) {
 	inline infix fun <Value, reified V2 : Value> TableColumn<Value>.within(values : List<V2>) {
 		op("=", Expression.callFunction<Value>("ANY", Expression.parameter(values, this.type)))
 	}
+
+	private fun conjoined(joiner : String, cb : WhereInit.()->Unit) {
+		val subBuilder = WhereStatementBuilder()
+		cb(WhereInit(subBuilder))
+		builder.addWhereClause(ConjoinedWhereClauses(joiner, subBuilder.clauses))
+	}
+
+	fun anyOf(cb : WhereInit.()->Unit) = conjoined(" OR ", cb)
+
+	fun allOf(cb : WhereInit.()->Unit) = conjoined(" AND ", cb)
 }
 
-data class WhereClause(val left : Expression<*>, val op : String, val right : Expression<*>) {
-	fun render(scope : SqlScope) : RenderedSqlFragment {
+interface WhereClause : Expression<Boolean>
+private data class OpWhereClause(val left : Expression<*>, val op : String, val right : Expression<*>) : WhereClause  {
+	override fun render(scope : SqlScope) : RenderedSqlFragment {
 		return RenderedSqlFragment.build(scope) {
 			add(left)
 			add(" $op ")
 			add(right)
+		}
+	}
+}
+
+private data class ConjoinedWhereClauses(val joiner : String, val clauses : List<WhereClause>) : WhereClause {
+	override fun render(scope: SqlScope): RenderedSqlFragment {
+		return RenderedSqlFragment.build(scope){
+			add("(")
+			addJoinedExprs(joiner, clauses)
+			add(")")
 		}
 	}
 }
