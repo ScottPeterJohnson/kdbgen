@@ -27,6 +27,9 @@ class WhereInit(private val builder : CanHaveWhereStatement) {
 		builder.addWhereClause(OpWhereClause(this, op, value))
 	}
 
+	fun <Value> Expression<Value?>.isNull() = builder.addWhereClause(IsClause(this, addNot = false))
+	fun <Value> Expression<Value?>.isNotNull() = builder.addWhereClause(IsClause(this, addNot = true))
+
 	infix fun <Value, V2 : Value> Expression<Value>.equalTo(value : Expression<in V2>) = op("=", value)
 	infix fun <Value, V2 : Value> Expression<Value>.notEqualTo(value : Expression<in V2>) = op("!=", value)
 	infix fun <Value, V2 : Value> Expression<Value>.greaterThan(value : Expression<in V2>) = op(">", value)
@@ -65,6 +68,19 @@ private data class ConjoinedWhereClauses(val joiner : String, val clauses : List
 			add("(")
 			addJoinedExprs(joiner, clauses)
 			add(")")
+		}
+	}
+}
+
+private data class IsClause(val operand : Expression<*>, val addNot : Boolean) : WhereClause {
+	override fun render(scope: SqlScope): RenderedSqlFragment {
+		return RenderedSqlFragment.build(scope){
+			add(operand)
+			add(" IS ")
+			if(addNot){
+				add("NOT ")
+			}
+			add("NULL")
 		}
 	}
 }

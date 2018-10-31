@@ -4,6 +4,7 @@ import io.kotlintest.matchers.beEmpty
 import io.kotlintest.should
 import io.kotlintest.shouldBe
 import io.kotlintest.shouldNot
+import io.kotlintest.shouldNotBe
 import net.justmachinery.kdbgen.common.CommonTimestamp
 import net.justmachinery.kdbgen.common.CommonUUID
 import net.justmachinery.kdbgen.dsl.ConnectionProvider
@@ -119,6 +120,28 @@ class BasicOperationsTest : DatabaseTest() {
 					}
 					returningNothing()
 				}.execute()
+			}
+		}
+		"nullability" {
+			sql {
+				usersTable.insert {
+					values(userName = "Bob")
+					returningNothing()
+				}.execute()
+
+				usersTable.select {
+					where {
+						emailAddress.isNull()
+					}
+					returning(`*`)
+				}.singleOrNull() shouldNotBe null
+
+				usersTable.select {
+					where {
+						emailAddress.isNotNull()
+					}
+					returning(`*`)
+				}.singleOrNull() shouldBe null
 			}
 		}
 	}
