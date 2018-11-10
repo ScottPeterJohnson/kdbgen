@@ -23,7 +23,7 @@ plugins {
 }
 
 allprojects {
-	version = "0.6.4"
+	version = "0.6.5"
 	group = "net.justmachinery.kdbgen"
 
 

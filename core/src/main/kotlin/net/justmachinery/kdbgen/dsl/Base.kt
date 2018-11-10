@@ -18,9 +18,14 @@ interface SqlDslBase
 @Suppress("unused")
 inline fun <reified T> SqlDslBase.parameter(value : T) = Expression.parameter(value)
 
+private fun sqlEscaped(name : String) : String {
+	return "\"" + name.replace("\"", "\"\"") + "\""
+}
+
 interface Table<Columns> {
 	fun aliased(alias : String) : Table<Columns>
 	val tableName: String
+	fun escapedTableName() = sqlEscaped(tableName)
 
 	val columns : Columns
 	val columnsList : List<TableColumn<*>>
@@ -32,6 +37,8 @@ class TableColumn<Type>(val table : Table<*>,
 						val name: String,
                         val type: PostgresType) : Selectable<Type>, Expression<Type>
 {
+	fun escapedName() = sqlEscaped(name)
+
     @Suppress("UNCHECKED_CAST")
     override fun construct(values: List<Any?>): Type {
         return values.first() as Type
@@ -138,9 +145,9 @@ class SqlScope {
 
 	fun referenceUnambiguously(column : TableColumn<*>) : String {
 		return if(needsQualification(column)){
-			column.table.tableName + "." + column.name
+			column.table.escapedTableName() + "." + column.escapedName()
 		} else {
-			column.name
+			column.escapedName()
 		}
 	}
 
@@ -190,7 +197,7 @@ internal fun statementToFragment(statement : StatementReturning<*>, scope : SqlS
 	val selectValues = builder.selectValues
 	val insertValues = builder.insertValues
 	val updateValues = builder.updateValues
-	val tableName = builder.table.tableName
+	val escapedTableName = builder.table.escapedTableName()
 
 	sanityCheckStatement(statement)
 
@@ -200,7 +207,7 @@ internal fun statementToFragment(statement : StatementReturning<*>, scope : SqlS
 	}
 
 
-	val joins = builder.joinTables.joinToString(", "){ it.tableName }
+	val joins = builder.joinTables.joinToString(", "){ it.escapedTableName() }
 
 	val fragment = RenderedSqlFragment.build(scope) {
 
@@ -222,7 +229,7 @@ internal fun statementToFragment(statement : StatementReturning<*>, scope : SqlS
 			SqlOperation.SELECT -> {
 				add("SELECT ")
 				addJoined(", ", scope.renderSelections(topmost, selectValues))
-				add(" FROM $tableName")
+				add(" FROM $escapedTableName")
 				if(builder.joinTables.isNotEmpty()){
 					add(", ")
 					add(joins)
@@ -242,10 +249,10 @@ internal fun statementToFragment(statement : StatementReturning<*>, scope : SqlS
 				}
 			}
 			SqlOperation.INSERT -> {
-				add("INSERT INTO $tableName(")
+				add("INSERT INTO $escapedTableName(")
 				//Find a list of columns involved in this insert across all value lists
 				val columns = insertValues.flatMap { values -> values.map { it.column } }.distinct()
-				add(columns.joinToString(", ") { it.name })
+				add(columns.joinToString(", ") { it.escapedName() })
 				add(") VALUES ")
 
 
@@ -266,7 +273,7 @@ internal fun statementToFragment(statement : StatementReturning<*>, scope : SqlS
 					val excluded = builder.table.aliased("excluded")
 					scope.addTable(excluded)
 					if(conflictClause.columns.isNotEmpty()){
-						add("(${conflictClause.columns.joinToString(",") { it.name } })")
+						add("(${conflictClause.columns.joinToString(",") { it.escapedName() } })")
 					}
 					if(conflictClause.updates.isNotEmpty()){
 						add(" DO UPDATE SET ")
@@ -282,7 +289,7 @@ internal fun statementToFragment(statement : StatementReturning<*>, scope : SqlS
 				addReturning()
 			}
 			SqlOperation.UPDATE -> {
-				add("UPDATE $tableName SET ")
+				add("UPDATE $escapedTableName SET ")
 				addJoined(", ", updateValues.map { it.render(scope) })
 
 				if(builder.joinTables.isNotEmpty()){
@@ -293,7 +300,7 @@ internal fun statementToFragment(statement : StatementReturning<*>, scope : SqlS
 				addReturning()
 			}
 			SqlOperation.DELETE -> {
-				add("DELETE FROM $tableName")
+				add("DELETE FROM $escapedTableName")
 				if(builder.joinTables.isNotEmpty()){
 					add(" USING $joins")
 				}

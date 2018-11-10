@@ -15,7 +15,7 @@ interface UpdateStatementContext : SqlDslBase {
 data class SqlUpdateValue(val left : TableColumn<*>, val right : Expression<*>) {
 	fun render(scope : SqlScope) : RenderedSqlFragment {
 		return RenderedSqlFragment.build(scope) {
-			add(left.name + " = ")
+			add(left.escapedName() + " = ")
 			add(right)
 		}
 	}

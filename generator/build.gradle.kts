@@ -7,7 +7,6 @@ dependencies {
 	//Uncomment the :core dependency while developing, uncomment the Maven one while publishing. :)
 	compile("net.justmachinery.kdbgen:kdbgen-core:$version")
 	//compile(project(":core"))
-	implementation("org.reflections:reflections:0.9.10")
 	implementation("org.postgresql:postgresql:42.2.5")
 	implementation("org.jetbrains.kotlin:kotlin-reflect:1.2.61")
 	implementation("com.google.auto.service:auto-service:1.0-rc4")

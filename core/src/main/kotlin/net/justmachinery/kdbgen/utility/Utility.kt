@@ -66,4 +66,3 @@ private fun reflectionCreateEnum(clazz: Class<*>, value : String) : Any {
 }
 @Suppress("UNCHECKED_CAST")
 private fun <T: Enum<T>> asEnumClass(clazz: Class<*>): Class<T> = clazz as Class<T>
-
