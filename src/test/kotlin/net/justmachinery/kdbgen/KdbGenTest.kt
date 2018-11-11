@@ -12,7 +12,7 @@ import net.justmachinery.kdbgen.dsl.clauses.Result1
 import net.justmachinery.kdbgen.dsl.clauses.Result2
 import net.justmachinery.kdbgen.dsl.parameter
 import net.justmachinery.kdbgen.dsl.plus
-import net.justmachinery.kdbgen.dsl.subquery
+import net.justmachinery.kdbgen.dsl.uniqueSubquery
 import net.justmachinery.kdbgen.test.generated.enums.EnumTypeTest
 import net.justmachinery.kdbgen.test.generated.tables.*
 import org.postgresql.jdbc.PgConnection
@@ -158,7 +158,7 @@ class SubqueryTest : DatabaseTest() {
 				usersTable.update {
 					userId setTo parameter(3L)
 					where {
-						userName equalTo subquery(usersTable.select {
+						userName equalTo uniqueSubquery(usersTable.select {
 							where {
 								userId equalTo parameter(1L)
 							}

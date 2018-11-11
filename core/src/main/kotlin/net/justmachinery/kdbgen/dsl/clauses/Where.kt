@@ -39,6 +39,9 @@ class WhereInit(private val builder : CanHaveWhereStatement) {
 	inline infix fun <Value, reified V2 : Value> TableColumn<Value>.within(values : List<V2>) {
 		op("=", Expression.callFunction<Value>("ANY", Expression.parameter(values, this.type)))
 	}
+	inline infix fun <Value, reified V2 : Value> TableColumn<Value>.within(values : Expression<List<V2>>) {
+		op("=", Expression.callFunction<Value>("ANY", values))
+	}
 
 	private fun conjoined(joiner : String, cb : WhereInit.()->Unit) {
 		val subBuilder = WhereStatementBuilder()

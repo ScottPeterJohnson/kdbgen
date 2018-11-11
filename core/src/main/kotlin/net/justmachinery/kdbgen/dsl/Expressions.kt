@@ -99,11 +99,15 @@ data class SqlParameter<T>(val value : T, val type : KType, val postgresType : P
     }
 }
 
-fun <V> subquery(query : StatementReturning<Result1<V>>) : Expression<V> {
+fun <V> uniqueSubquery(query : StatementReturning<Result1<V>>) : Expression<V> {
     return SubqueryExpression(query)
 }
 
-data class SubqueryExpression<T>(val query : StatementReturning<Result1<T>>) : Expression<T> {
+fun <V> subquery(query : StatementReturning<Result1<V>>) : Expression<List<V>> {
+    return SubqueryExpression(query)
+}
+
+internal data class SubqueryExpression<T, V>(val query : StatementReturning<Result1<T>>) : Expression<V> {
     override fun render(scope: SqlScope): RenderedSqlFragment {
         return RenderedSqlFragment.build(scope) {
             add("(")
