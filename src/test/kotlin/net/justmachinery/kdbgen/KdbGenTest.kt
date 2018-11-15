@@ -272,6 +272,40 @@ class CommonTypeTest : DatabaseTest() {
 	}
 }
 
+class LikeTest : DatabaseTest(){
+	init {
+		"should handle like queries" {
+			sql {
+				usersTable.insert {
+					values(userName = "%foo%")
+					returningNothing()
+				}.execute()
+
+				usersTable.select {
+					where {
+						userName like { exact(parameter("%f%")) }
+					}
+					returning(`*`)
+				}.values() should beEmpty()
+
+				usersTable.select {
+					where {
+						userName like { prefix(parameter("%f")) }
+					}
+					returning(`*`)
+				}.value().userName shouldBe "%foo%"
+
+				usersTable.select {
+					where {
+						userName like "%f%"
+					}
+					returning(`*`)
+				}.value().userName shouldBe "%foo%"
+			}
+		}
+	}
+}
+
 fun docTest(){
 	val DATABASE_URL = "test"
 

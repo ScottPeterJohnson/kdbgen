@@ -9,3 +9,5 @@ operator fun <T : Number> Expression<T>.minus(other : Expression<T>) : Expressio
 operator fun <T : Number> Expression<T>.times(other : Expression<T>) : Expression<T> = Expression.callOperator("*", this, other)
 operator fun <T : Number> Expression<T>.div(other : Expression<T>) : Expression<T> = Expression.callOperator("/", this, other)
 operator fun <T : Number> Expression<T>.rem(other : Expression<T>) : Expression<T> = Expression.callOperator("%", this, other)
+
+fun SqlDslBase.concat(vararg exprs : Expression<String>) = Expression.callFunction<String>("concat", *exprs)

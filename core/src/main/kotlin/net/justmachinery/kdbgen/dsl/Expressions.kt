@@ -46,6 +46,13 @@ interface Expression<T> {
             return SqlParameter(value, reifiedKType<T>(), postgresType)
         }
 
+        fun literal(value : String) : Expression<String> {
+            return SqlLiteral(sqlEscaped(value, '\''))
+        }
+        fun <T : Number> literal(value : T) : Expression<T> {
+            return SqlLiteral(value.toString())
+        }
+
         fun <T> callFunction(name : String, vararg values : Expression<*>) : Expression<T> {
             return FunctionCallExpression(name, values.toList())
         }
@@ -72,6 +79,12 @@ internal data class FunctionCallExpression<T>(val name : String, val values : Li
             addJoinedExprs(", ", values)
             add(")")
         }
+    }
+}
+
+data class SqlLiteral<T>(val rendered : String) : Expression<T> {
+    override fun render(scope: SqlScope): RenderedSqlFragment {
+        return RenderedSqlFragment(rendered, listOf())
     }
 }
 

@@ -18,14 +18,23 @@ interface SqlDslBase
 @Suppress("unused")
 inline fun <reified T> SqlDslBase.parameter(value : T) = Expression.parameter(value)
 
-private fun sqlEscaped(name : String) : String {
+@Suppress("unused")
+inline fun <reified T : Number> SqlDslBase.literal(value : T) = Expression.literal(value)
+@Suppress("unused")
+inline fun SqlDslBase.literal(value : String) = Expression.literal(value)
+
+internal fun sqlEscaped(name : String, quote : Char) : String {
+	return "$quote" + name.replace("$quote", "$quote$quote") + "$quote"
+}
+
+private fun sqlEscapedIdentifier(name : String) : String {
 	return "\"" + name.replace("\"", "\"\"") + "\""
 }
 
 interface Table<Columns> {
 	fun aliased(alias : String) : Table<Columns>
 	val tableName: String
-	fun escapedTableName() = sqlEscaped(tableName)
+	fun escapedTableName() = sqlEscapedIdentifier(tableName)
 
 	val columns : Columns
 	val columnsList : List<TableColumn<*>>
@@ -37,7 +46,7 @@ class TableColumn<Type>(val table : Table<*>,
 						val name: String,
                         val type: PostgresType) : Selectable<Type>, Expression<Type>
 {
-	fun escapedName() = sqlEscaped(name)
+	fun escapedName() = sqlEscapedIdentifier(name)
 
     @Suppress("UNCHECKED_CAST")
     override fun construct(values: List<Any?>): Type {

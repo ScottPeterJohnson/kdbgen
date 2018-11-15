@@ -36,6 +36,53 @@ class WhereInit(private val builder : CanHaveWhereStatement) {
 	infix fun <Value, V2 : Value> Expression<Value>.greaterThanOrEqualTo(value : Expression<in V2>) = op(">=", value)
 	infix fun <Value, V2 : Value> Expression<Value>.lessThan(value : Expression<in V2>) = op("<", value)
 	infix fun <Value, V2 : Value> Expression<Value>.lessThanOrEqualTo(value : Expression<in V2>) = op("<=", value)
+
+
+	class LikeInit(val tokens : MutableList<Expression<String>>) {
+		fun anyCharacter(){
+			tokens.add(Expression.literal("_"))
+		}
+		fun anyString(){
+			tokens.add(Expression.literal("%"))
+		}
+		fun exact(value : Expression<String>){
+			fun Expression<String>.repl(char : Char) : Expression<String> {
+				return Expression.callFunction(
+					"replace",
+					this,
+					Expression.literal("$char"),
+					Expression.literal("\\$char")
+				)
+			}
+			tokens.add(value.repl('%').repl('_'))
+		}
+		fun prefix(value : Expression<String>){
+			exact(value)
+			anyString()
+		}
+		fun suffix(value : Expression<String>){
+			anyString()
+			exact(value)
+		}
+
+		fun contains(value : Expression<String>){
+			anyString()
+			exact(value)
+			anyString()
+		}
+	}
+	private fun buildLike(cb : (LikeInit)->Unit) : Expression<String> {
+		val tokens = mutableListOf<Expression<String>>()
+		val init = LikeInit(tokens)
+		cb(init)
+		return Expression.callFunction("concat", *tokens.toTypedArray())
+	}
+	infix fun Expression<String>.like(cb : LikeInit.()->Unit) = op("LIKE", buildLike(cb))
+	infix fun Expression<String>.ilike(cb : LikeInit.()->Unit) = op("ILIKE", buildLike(cb))
+	infix fun Expression<String>.like(patternLiteral : String) = op("LIKE", Expression.literal(patternLiteral))
+	infix fun Expression<String>.ilike(patternLiteral : String) = op("ILIKE", Expression.literal(patternLiteral))
+
+
 	inline infix fun <Value, reified V2 : Value> TableColumn<Value>.within(values : List<V2>) {
 		op("=", Expression.callFunction<Value>("ANY", Expression.parameter(values, this.type)))
 	}
