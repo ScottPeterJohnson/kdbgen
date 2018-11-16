@@ -1,9 +1,6 @@
 package net.justmachinery.kdbgen.dsl.clauses
 
-import net.justmachinery.kdbgen.dsl.Expression
-import net.justmachinery.kdbgen.dsl.RenderedSqlFragment
-import net.justmachinery.kdbgen.dsl.SqlScope
-import net.justmachinery.kdbgen.dsl.TableColumn
+import net.justmachinery.kdbgen.dsl.*
 
 
 interface CanHaveWhereStatement {
@@ -40,18 +37,18 @@ class WhereInit(private val builder : CanHaveWhereStatement) {
 
 	class LikeInit(val tokens : MutableList<Expression<String>>) {
 		fun anyCharacter(){
-			tokens.add(Expression.literal("_"))
+			tokens.add(sqlDsl.literal("_"))
 		}
 		fun anyString(){
-			tokens.add(Expression.literal("%"))
+			tokens.add(sqlDsl.literal("%"))
 		}
 		fun exact(value : Expression<String>){
 			fun Expression<String>.repl(char : Char) : Expression<String> {
-				return Expression.callFunction(
+				return sqlDsl.callFunction(
 					"replace",
 					this,
-					Expression.literal("$char"),
-					Expression.literal("\\$char")
+					sqlDsl.literal("$char"),
+					sqlDsl.literal("\\$char")
 				)
 			}
 			tokens.add(value.repl('%').repl('_'))
@@ -75,19 +72,19 @@ class WhereInit(private val builder : CanHaveWhereStatement) {
 		val tokens = mutableListOf<Expression<String>>()
 		val init = LikeInit(tokens)
 		cb(init)
-		return Expression.callFunction("concat", *tokens.toTypedArray())
+		return sqlDsl.callFunction("concat", *tokens.toTypedArray())
 	}
 	infix fun Expression<String>.like(cb : LikeInit.()->Unit) = op("LIKE", buildLike(cb))
 	infix fun Expression<String>.ilike(cb : LikeInit.()->Unit) = op("ILIKE", buildLike(cb))
-	infix fun Expression<String>.like(patternLiteral : String) = op("LIKE", Expression.literal(patternLiteral))
-	infix fun Expression<String>.ilike(patternLiteral : String) = op("ILIKE", Expression.literal(patternLiteral))
+	infix fun Expression<String>.like(patternLiteral : String) = op("LIKE", sqlDsl.literal(patternLiteral))
+	infix fun Expression<String>.ilike(patternLiteral : String) = op("ILIKE", sqlDsl.literal(patternLiteral))
 
 
 	inline infix fun <Value, reified V2 : Value> TableColumn<Value>.within(values : List<V2>) {
-		op("=", Expression.callFunction<Value>("ANY", Expression.parameter(values, this.type)))
+		op("=", sqlDsl.callFunction<Value>("ANY", sqlDsl.parameter(values, this.type)))
 	}
 	inline infix fun <Value, reified V2 : Value> TableColumn<Value>.within(values : Expression<List<V2>>) {
-		op("=", Expression.callFunction<Value>("ANY", values))
+		op("=", sqlDsl.callFunction<Value>("ANY", values))
 	}
 
 	private fun conjoined(joiner : String, cb : WhereInit.()->Unit) {

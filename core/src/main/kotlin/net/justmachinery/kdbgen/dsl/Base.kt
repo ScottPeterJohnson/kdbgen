@@ -4,6 +4,7 @@ import net.justmachinery.kdbgen.commonTimestampFull
 import net.justmachinery.kdbgen.commonUuidFull
 import net.justmachinery.kdbgen.dsl.clauses.*
 import net.justmachinery.kdbgen.utility.selectMapper
+import uy.klutter.reflect.reifiedKType
 import java.sql.Connection
 import java.sql.PreparedStatement
 import java.sql.Timestamp
@@ -13,15 +14,32 @@ import kotlin.reflect.KTypeProjection
 import kotlin.reflect.full.createType
 import kotlin.reflect.jvm.jvmErasure
 
-interface SqlDslBase
+interface SqlDslBase {
+	//Defining these within the interface allows them to be helpfully scoped to only be available when constructing sql
+	fun literal(value : String) : Expression<String> {
+		return SqlLiteral(sqlEscaped(value, '\''))
+	}
+	fun literal(value : Boolean) : Expression<Boolean> {
+		return SqlLiteral(if(value) "TRUE" else "FALSE")
+	}
+	fun <T : Number> literal(value : T) : Expression<T> {
+		return SqlLiteral(value.toString())
+	}
 
-@Suppress("unused")
-inline fun <reified T> SqlDslBase.parameter(value : T) = Expression.parameter(value)
+	fun <T> callFunction(name : String, vararg values : Expression<*>) : Expression<T> {
+		return FunctionCallExpression(name, values.toList())
+	}
+	fun <T> callOperator(name : String, vararg values : Expression<*>) : Expression<T> {
+		return OperatorExpression(name, values.toList())
+	}
+}
+inline fun <reified T> SqlDslBase.parameter(value : T, postgresType : PostgresType? = null) : Expression<T> {
+	@Suppress("DEPRECATION")
+	return SqlParameter(value, reifiedKType<T>(), postgresType)
+}
 
-@Suppress("unused")
-inline fun <reified T : Number> SqlDslBase.literal(value : T) = Expression.literal(value)
-@Suppress("unused")
-inline fun SqlDslBase.literal(value : String) = Expression.literal(value)
+//This provides a convenient way to access the SqlDslBase scope when not directly in a dsl construction context
+val sqlDsl = object : SqlDslBase {}
 
 internal fun sqlEscaped(name : String, quote : Char) : String {
 	return "$quote" + name.replace("$quote", "$quote$quote") + "$quote"
@@ -254,7 +272,7 @@ internal fun statementToFragment(statement : StatementReturning<*>, scope : SqlS
 				}
 				if(builder.selectLimit != null){
 					add(" LIMIT ")
-					add(Expression.parameter(builder.selectLimit))
+					add(sqlDsl.parameter(builder.selectLimit))
 				}
 			}
 			SqlOperation.INSERT -> {

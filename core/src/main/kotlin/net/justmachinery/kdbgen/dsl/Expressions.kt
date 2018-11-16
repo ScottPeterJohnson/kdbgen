@@ -1,7 +1,6 @@
 package net.justmachinery.kdbgen.dsl
 
 import net.justmachinery.kdbgen.dsl.clauses.Result1
-import uy.klutter.reflect.reifiedKType
 import kotlin.reflect.KType
 
 data class RenderedSqlFragment(val sql : String, val parameters : List<SqlParameter<*>>){
@@ -39,27 +38,6 @@ data class RenderedSqlFragment(val sql : String, val parameters : List<SqlParame
 
 interface Expression<T> {
     fun render(scope : SqlScope) : RenderedSqlFragment
-
-    companion object {
-        inline fun <reified T> parameter(value : T, postgresType : PostgresType? = null) : Expression<T> {
-            @Suppress("DEPRECATION")
-            return SqlParameter(value, reifiedKType<T>(), postgresType)
-        }
-
-        fun literal(value : String) : Expression<String> {
-            return SqlLiteral(sqlEscaped(value, '\''))
-        }
-        fun <T : Number> literal(value : T) : Expression<T> {
-            return SqlLiteral(value.toString())
-        }
-
-        fun <T> callFunction(name : String, vararg values : Expression<*>) : Expression<T> {
-            return FunctionCallExpression(name, values.toList())
-        }
-        fun <T> callOperator(name : String, vararg values : Expression<*>) : Expression<T> {
-            return OperatorExpression(name, values.toList())
-        }
-    }
 }
 
 internal data class OperatorExpression<T>(val name : String, val values : List<Expression<*>>) : Expression<T> {
