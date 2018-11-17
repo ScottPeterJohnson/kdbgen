@@ -13,6 +13,10 @@ import net.justmachinery.kdbgen.dsl.clauses.Result2
 import net.justmachinery.kdbgen.dsl.parameter
 import net.justmachinery.kdbgen.dsl.plus
 import net.justmachinery.kdbgen.dsl.uniqueSubquery
+import net.justmachinery.kdbgen.kapt.SqlQuery
+import net.justmachinery.kdbgen.sql.addition
+import net.justmachinery.kdbgen.sql.insertUser
+import net.justmachinery.kdbgen.sql.selectAllUsers
 import net.justmachinery.kdbgen.test.generated.enums.EnumTypeTest
 import net.justmachinery.kdbgen.test.generated.tables.*
 import org.postgresql.jdbc.PgConnection
@@ -20,6 +24,27 @@ import java.sql.Connection
 import java.sql.DriverManager
 import java.util.*
 
+
+
+@SqlQuery("addition",
+	"SELECT 1 + :addendum AS foobar"
+)
+@SqlQuery("insertUser",
+	//language=PostgreSQL
+	"""INSERT INTO users(user_name) VALUES (:name) RETURNING *"""
+)
+@SqlQuery("selectAllUsers", "SELECT * FROM users")
+class AnnotationQueriesTest : DatabaseTest() {
+	init {
+		"should be able to do basic operations" {
+			sql {
+				addition(3).first().foobar shouldBe 4
+				insertUser("foobar")
+				selectAllUsers().first().user_name shouldBe "foobar"
+			}
+		}
+	}
+}
 
 class BasicOperationsTest : DatabaseTest() {
 	init {

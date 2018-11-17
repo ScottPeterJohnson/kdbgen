@@ -2,7 +2,9 @@ package net.justmachinery.kdbgen.kapt
 
 @Target(AnnotationTarget.CLASS)
 @Retention(AnnotationRetention.SOURCE)
-annotation class GeneratePostgresInterface(
+annotation class GeneratePostgresInterface
+
+annotation class SqlGenerationSettings(
     /**
      * URL of database to connect to (including user/pass)
      */
@@ -38,3 +40,20 @@ annotation class GeneratePostgresInterface(
      */
     val mutableData : Boolean = false
 )
+
+@Suppress("DEPRECATED_JAVA_ANNOTATION")
+@Target(
+    AnnotationTarget.CLASS,
+    AnnotationTarget.TYPE,
+    AnnotationTarget.PROPERTY
+)
+@Repeatable
+@java.lang.annotation.Repeatable(SqlQueries::class)
+@Retention(AnnotationRetention.SOURCE)
+annotation class SqlQuery(
+    val name : String,
+    val query : String
+)
+
+@Retention(AnnotationRetention.SOURCE)
+annotation class SqlQueries(vararg val value : SqlQuery)

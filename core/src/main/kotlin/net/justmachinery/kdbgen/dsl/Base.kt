@@ -89,11 +89,6 @@ data class PostgresType(val type : KType, val rawType : String, val requiresCast
 
 }
 
-
-fun executeStatement(statement : StatementReturning<*>, connection: Connection) {
-	prepareStatement(statement, connection).execute()
-}
-
 fun <Result : ResultTuple> executeStatementReturning(statement : StatementReturning<Result>, connection: Connection): List<Result> {
 	val (prepared , scope) = prepareStatementAndScope(statement, connection)
 	val resultSet = prepared.executeQuery()

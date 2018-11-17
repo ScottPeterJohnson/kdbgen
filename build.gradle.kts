@@ -4,26 +4,17 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import java.util.Date
 import java.net.URI
 
-buildscript {
-	repositories {
-		mavenCentral()
-	}
-	dependencies {
-		classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:1.2.70")
-	}
-}
-
 plugins {
 	`java-gradle-plugin`
 	maven
 	`maven-publish`
-	kotlin("jvm").version("1.2.61")
+	kotlin("jvm").version("1.3.10")
 	id("com.jfrog.bintray").version("1.8.4")
-	id("org.jetbrains.kotlin.kapt").version("1.2.70")
+	id("org.jetbrains.kotlin.kapt").version("1.3.10")
 }
 
 allprojects {
-	version = "0.6.7"
+	version = "0.7.0"
 	group = "net.justmachinery.kdbgen"
 
 
@@ -76,11 +67,9 @@ subprojects {
 		this.setProperty("publications", arrayOf("kdbgen-$name"))
 	}
 
-	tasks {
-		"sourcesJar"(Jar::class) {
-			classifier = "sources"
-			from(java.sourceSets["main"].allSource)
-		}
+	tasks.register<Jar>("sourcesJar") {
+		classifier = "sources"
+		from(sourceSets["main"].allSource)
 	}
 }
 
@@ -94,7 +83,7 @@ allprojects {
 		jvmTarget = JavaVersion.VERSION_1_8.toString()
 	}
 	dependencies {
-		compile("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.2.61")
+		compile("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.3.10")
 	}
 }
 
@@ -104,13 +93,13 @@ val test by tasks.getting(Test::class) {
 }
 
 dependencies {
-	testCompile(project(":core"))
-	testCompileOnly(project(":generator"))
+	testCompile(project(":generator"))
 	kaptTest(project(":generator"))
 	testCompile("org.postgresql:postgresql:42.2.5")
 	testCompile("io.kotlintest:kotlintest-runner-junit5:3.1.8")
 	testImplementation("org.junit.jupiter:junit-jupiter-api:5.3.1")
 	testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.3.1")
+	implementation("org.jetbrains.kotlin:kotlin-reflect:1.3.10")
 }
 
 description = "Testing master project for kdbgen"

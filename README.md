@@ -2,14 +2,21 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![GitHub release](https://img.shields.io/github/release/qubyte/rubidium.svg)]()
  
- Experimental library for generating Kotlin DSL to interact with a Postgres database. 
- Currently supports:
-  - Basic select/insert/update/delete operations on a single table
-  - Custom Postgres enum types
+ Experimental library for generating Kotlin code to interact with a Postgres database. 
+ Currently supports two methods:
+  - Arbitrary SQL transformed into Kotlin functions
+  - A somewhat limited DSL generator
+ 
+ The arbitrary SQL method is probably the far more powerful and elegant. The DSL generation may be repurposed or scrapped.
  
  The basic philosophy is:
  - The database should be the source of truth for Kotlin objects representing its rows, so those should be generated automatically.
- - Queries should be as type-safe as possible, which can be accomplished with code generation.
+ - Queries should be known safe at compile time.
+ - SQL is a fine language for writing SQL.
+ 
+ Warning: Contains annotation processors that rely on having a local Postgres 
+ database with your schema in it to compile. It is this library's opinion that
+ this is natural and laudable and not a big deal, but this may be a controversial stance.
   
 ## Use
 ### Install
@@ -30,45 +37,67 @@ dependencies {
 
 Add the following annotation anywhere in your project:
 ```kotlin
-@GeneratePostgresInterface(
+@SqlGenerationSettings(
 	databaseUrl = "jdbc:postgresql://localhost:5432/DATABASE?user=DATABASE_USER&password=DATABASE_PASSWORD"
 )
 private class GeneratePostgres
+```
+
+If DSL generation is desired, add:
+```kotlin
+@GeneratePostgresInterface
 ```
 You will need to replace:
 - `DATABASE`, `DATABASE_USER`, `DATABASE_PASSWORD` with an accessible database/user/password (a local one, probably)
 - `<VERSION>` with the latest version of this repository
 
-Other configuration options are available on the GeneratePostgresInterface annotation.
+Other configuration options are available on as properties on the Settings annotation.
 
-### Multiplatform Kotlin
-To use the generated convenience row types in a multiplatform Kotlin project (JS + JVM + Shared code), kdbgen should be a dependency of the JVM project, 
-the `useCommonTypes` flag should be enabled if any of your columns are timestamps or UUIDs, the `--outputDirectory` should point to the shared project's generated sources,
-and `dslDirectory` should be set to the JVM project's generated sources. 
-
-### Serialization
-Add `dataAnnotation=["kotlinx.serialization.Serializable"]`, to use generated classes with 
-with kotlinx-serialization.
-
-### Basic examples
-
- Assume a basic users table with mandatory "uid", "email_address", and optional "name" fields.
- 
-#### Setup
+### Setup
 ```kotlin
 //Any method of getting a connection will suffice. Using basic JDBC:
-val connection = DriverManager.getConnection(DATABASE_URL, Properties()) as PgConnection
-//A basic wrapper for obtaining a connection, whether through threadpool or just reusing the same connection
 val connectionProvider = object : ConnectionProvider {
+    //A connection provider is just a basic wrapper for obtaining a connection.
+    //For efficiency, you probably want a connection pool.
     override fun getConnection(): Connection {
-        return connection
+        return DriverManager.getConnection(DATABASE_URL, Properties()) as PgConnection
     }
 }
-//This will let us write nice DSL
+//This will bring relevant functions into scope
 fun sql(cb : ConnectionProvider.()->Unit){
     cb(connectionProvider)
 }
 ```
+
+### Usage (SQL Query)
+```kotlin
+@SqlQuery("addition",
+    //The following comment allows for Intellij to highlight syntax:
+    //language=PostgreSQL
+	"""SELECT 1 + :addendum AS foobar"""
+)
+val foo = 3 
+//It doesn't really matter _what_ you annotate.
+//But for annotation processor reasons, it has to be a class or property.
+
+
+fun test(){
+    sql {
+        addition(addendum = 3).first().foobar //4
+    }
+}
+
+```
+That's pretty much it. Write any SQL query your database supports.
+kdbgen will turn it into a function that accepts named parameters of the proper types,
+and returns a data class with all of the returned columns.
+
+### Usage (DSL)
+
+You can probably ignore the DSL. It doesn't support many Postgres features.
+
+ Assume a basic users table with mandatory "uid", "email_address", and optional "name" fields.
+ 
 
 #### Select user
 ```kotlin
@@ -177,8 +206,20 @@ sql {
 
 ```
 
+## Configuration
+### Multiplatform Kotlin
+To use the generated convenience row types in a multiplatform Kotlin project (JS + JVM + Shared code), kdbgen should be a dependency of the JVM project, 
+the `useCommonTypes` flag should be enabled if any of your columns are timestamps or UUIDs, the `--outputDirectory` should point to the shared project's generated sources,
+and `dslDirectory` should be set to the JVM project's generated sources. 
+
+### Serialization
+Add `dataAnnotation=["kotlinx.serialization.Serializable"]`, to use generated classes with 
+with kotlinx-serialization.
+
+
 ## Caveats
 - Library syntax may change.
 
 ## TODO
-- More operations
+- Transforming result sets could be a little more efficient
+- This approach could probably work with arbitrary SQL providers, not just Postgres. 

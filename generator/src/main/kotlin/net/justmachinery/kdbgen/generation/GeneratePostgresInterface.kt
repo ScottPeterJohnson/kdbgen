@@ -3,8 +3,8 @@ package net.justmachinery.kdbgen.generation
 import net.justmachinery.kdbgen.commonTimestampFull
 import net.justmachinery.kdbgen.commonTypesPackage
 import net.justmachinery.kdbgen.commonUuidFull
-import net.justmachinery.kdbgen.utility.Json
-import net.justmachinery.kdbgen.utility.onlyWhen
+import net.justmachinery.kdbgen.generation.utility.Json
+import net.justmachinery.kdbgen.generation.utility.onlyWhen
 import org.postgresql.geometric.*
 import org.postgresql.jdbc.PgConnection
 import org.postgresql.util.PGInterval
@@ -45,12 +45,12 @@ fun runGeneration(settings: Settings) {
 	File(settings.dslDirectory()).deleteRecursively()
 	File(settings.commonTypesDirectory()).deleteRecursively()
 
-	val context = constructContext(settings)
+	val (tables, context) = constructContext(settings)
 	for(enum in context.postgresTypeToEnum.values){
 		renderEnumType(context.settings, enum)
 	}
 
-	for (type in context.tables) {
+	for (type in tables) {
 		val renderer = DslRenderer(type, context)
 		renderer.render()
 	}
@@ -61,7 +61,7 @@ fun runGeneration(settings: Settings) {
 }
 
 
-private fun constructContext(settings : Settings) : RenderingContext {
+private fun constructContext(settings : Settings) : Pair<List<PostgresTable>, RenderingContext> {
 	DriverManager.registerDriver(org.postgresql.Driver())
 	val connection = DriverManager.getConnection(settings.databaseUrl, Properties()) as PgConnection
 
@@ -91,12 +91,11 @@ private fun constructContext(settings : Settings) : RenderingContext {
 				postgresTableColumns = properties))
 	}
 
-	return RenderingContext(types, settings, userEnumTypes)
+	return Pair(types, RenderingContext(settings, userEnumTypes))
 }
 
 
 internal class RenderingContext(
-	val tables : List<PostgresTable>,
 	val settings: Settings,
 	enums: List<EnumType>) {
 	internal val postgresTypeToEnum = enums.associateBy { it.postgresName }
@@ -122,8 +121,8 @@ internal class RenderingContext(
 		return result
 	}
 
-	private data class TypeRepr(val base : String, val nullable : Boolean, val params : List<TypeRepr>)
-	private fun mapPostgresType(postgresType: String, nullable: Boolean): TypeRepr {
+	internal data class TypeRepr(val base : String, val nullable : Boolean, val params : List<TypeRepr>)
+	internal fun mapPostgresType(postgresType: String, nullable: Boolean): TypeRepr {
 		val defaultType = when (postgresType) {
 			//See TypeInfoCache in the Postgres driver implementation
 			"int", "smallint", "integer", "int2", "int4" -> Integer::class

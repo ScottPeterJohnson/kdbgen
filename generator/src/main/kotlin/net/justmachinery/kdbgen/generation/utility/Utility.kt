@@ -1,4 +1,4 @@
-package net.justmachinery.kdbgen.utility
+package net.justmachinery.kdbgen.generation.utility
 
 internal fun String.onlyWhen(condition: Boolean): String {
     return if (condition) {

@@ -23,14 +23,14 @@ internal fun <Result : ResultTuple> selectMapper(resultClass : KClass<Result>, s
 	fun parseSelect(select : Selectable<*>) : Any? {
 		val mapped = scope.resolve(select)
 		return select.construct(mapped.map { (alias, type) ->
-			convertFromResultSet(resultSet.getObject(alias), type)
+			convertFromResultSetObject(resultSet.getObject(alias), type)
 		})
 	}
 	val values = selects.map(::parseSelect).toTypedArray()
 	return resultClass.primaryConstructor!!.call(*values)
 }
 
-private fun convertFromResultSet(value : Any?, type : KType) : Any?  {
+fun convertFromResultSetObject(value : Any?, type : KType) : Any?  {
 	var result : Any? = value
 	if (value is PGobject) {
 		result = value.value
@@ -46,7 +46,7 @@ private fun convertFromResultSet(value : Any?, type : KType) : Any?  {
 		assert(type.arguments.size == 1)
 
 		val array = value.array as Array<*>
-		result = array.toList().map { convertFromResultSet(it, type.arguments[0].type!!) }
+		result = array.toList().map { convertFromResultSetObject(it, type.arguments[0].type!!) }
 	}
 	if (result is String && notNullType.isSubtypeOf(Enum::class.starProjectedType)) {
 		val typeClass = type.jvmErasure.java
@@ -60,6 +60,7 @@ private fun convertFromResultSet(value : Any?, type : KType) : Any?  {
 	}
 	return result
 }
+
 
 private fun reflectionCreateEnum(clazz: Class<*>, value : String) : Any {
 	return java.lang.Enum.valueOf(asEnumClass<TimeUnit>(clazz), value)
