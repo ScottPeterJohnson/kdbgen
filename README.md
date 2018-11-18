@@ -1,6 +1,5 @@
-[ ![Download](https://api.bintray.com/packages/scottpjohnson/generic/kdbgen/images/download.svg) ](https://bintray.com/scottpjohnson/generic/kdbgen/_latestVersion)
+[ ![Download](https://api.bintray.com/packages/scottpjohnson/generic/kdbgen/images/download.svg) ](https://bintray.com/scottpjohnson/generic/kdbgen-core/_latestVersion)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![GitHub release](https://img.shields.io/github/release/qubyte/rubidium.svg)]()
  
  Experimental library for generating Kotlin code to interact with a Postgres database. 
  Currently supports two methods:
@@ -31,7 +30,7 @@ repositories {
 
 dependencies {
     compile 'net.justmachinery.kdbgen:kdbgen-core:<VERSION>'
-        kapt 'net.justmachinery.kdbgen:kdbgen-generator:<VERSION>'
+    kapt 'net.justmachinery.kdbgen:kdbgen-generator:<VERSION>'
 }
 ```
 
@@ -208,7 +207,7 @@ sql {
 
 ## Configuration
 ### Multiplatform Kotlin
-To use the generated convenience row types in a multiplatform Kotlin project (JS + JVM + Shared code), kdbgen should be a dependency of the JVM project, 
+To use the generated DSL convenience row types in a multiplatform Kotlin project (JS + JVM + Shared code), kdbgen should be a dependency of the JVM project, 
 the `useCommonTypes` flag should be enabled if any of your columns are timestamps or UUIDs, the `--outputDirectory` should point to the shared project's generated sources,
 and `dslDirectory` should be set to the JVM project's generated sources. 
 
