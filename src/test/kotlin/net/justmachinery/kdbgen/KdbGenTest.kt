@@ -14,10 +14,7 @@ import net.justmachinery.kdbgen.dsl.parameter
 import net.justmachinery.kdbgen.dsl.plus
 import net.justmachinery.kdbgen.dsl.uniqueSubquery
 import net.justmachinery.kdbgen.kapt.SqlQuery
-import net.justmachinery.kdbgen.sql.addition
-import net.justmachinery.kdbgen.sql.deleteUser
-import net.justmachinery.kdbgen.sql.insertUser
-import net.justmachinery.kdbgen.sql.selectAllUsers
+import net.justmachinery.kdbgen.sql.*
 import net.justmachinery.kdbgen.test.generated.enums.EnumTypeTest
 import net.justmachinery.kdbgen.test.generated.tables.*
 import org.postgresql.jdbc.PgConnection
@@ -40,6 +37,10 @@ import java.util.*
     //language=PostgreSQL
     """DELETE FROM users WHERE user_name = :name"""
 )
+@SqlQuery("nullableSelect",
+	//language=PostgreSQL
+	"""SELECT * FROM users WHERE user_name = :name?"""
+)
 class AnnotationQueriesTest : DatabaseTest() {
 	init {
 		"should be able to do basic operations" {
@@ -49,6 +50,7 @@ class AnnotationQueriesTest : DatabaseTest() {
 				selectAllUsers().first().user_name shouldBe "foobar"
                 deleteUser("foobar")
                 selectAllUsers() should beEmpty()
+				nullableSelect(null)
 			}
 		}
 	}

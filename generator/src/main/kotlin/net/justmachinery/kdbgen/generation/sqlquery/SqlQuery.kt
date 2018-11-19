@@ -10,7 +10,6 @@ import org.postgresql.jdbc.PgConnection
 import java.io.File
 import java.sql.Connection
 import java.sql.DriverManager
-import java.sql.ParameterMetaData
 import java.sql.ResultSetMetaData
 import java.util.*
 import java.util.regex.Pattern
@@ -153,11 +152,19 @@ internal class SqlQueryWrapperGenerator(
         val parameterMetaData = prep.parameterMetaData!!
 
         val inputs = (1..parameterMetaData.parameterCount).map {
+            var paramName = mapping[it]!!
+            val nullable : Boolean
+            if(paramName.endsWith("?")){
+                paramName = paramName.dropLast(1)
+                nullable = true
+            } else {
+                nullable = false
+            }
             InputParameter(
                 typeName = parameterMetaData.getParameterTypeName(it),
-                nullable = parameterMetaData.isNullable(it) == ParameterMetaData.parameterNullable,
+                nullable = nullable,
                 sqlTypeCode = parameterMetaData.getParameterType(it),
-                parameterName = mapping[it]!!
+                parameterName = paramName
             )
         }
         val outputs = if (metaData != null) {
@@ -179,7 +186,7 @@ internal class SqlQueryWrapperGenerator(
 
     fun replaceNamedParameters(query: String): Pair<String, Map<Int, String>> {
         val bindings = mutableMapOf<Int, String>()
-        val pattern = Pattern.compile(":(\\w+)")
+        val pattern = Pattern.compile(":(\\w+\\??)")
         val matcher = pattern.matcher(query)
 
         val transformed = StringBuilder()

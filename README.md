@@ -91,6 +91,14 @@ That's pretty much it. Write any SQL query your database supports.
 kdbgen will turn it into a function that accepts named parameters of the proper types,
 and returns a data class with all of the returned columns.
 
+#### Input parameter nullability
+Unfortunately, Postgres does not seem to support nullability metadata on input parameter types.
+For safety, kdbgen assumes all input parameters are never null. If you need nullability, add a `?`
+to the end of a parameter name. For example, `select * from users where name = :name?`.
+
+Keep in mind that nulls are special snowflakes in SQL. The above query for instance will never
+return any rows when passed null.
+
 ### Usage (DSL)
 
 You can probably ignore the DSL. It doesn't support many Postgres features.
