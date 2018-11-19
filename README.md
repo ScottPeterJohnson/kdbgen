@@ -48,7 +48,7 @@ If DSL generation is desired, add:
 ```
 You will need to replace:
 - `DATABASE`, `DATABASE_USER`, `DATABASE_PASSWORD` with an accessible database/user/password (a local one, probably)
-- `<VERSION>` with the latest version of this repository
+- `<VERSION>` with the latest version of this repository (currently [ ![Download](https://api.bintray.com/packages/scottpjohnson/generic/kdbgen/images/download.svg) ](https://bintray.com/scottpjohnson/generic/kdbgen-core/_latestVersion))
 
 Other configuration options are available on as properties on the Settings annotation.
 

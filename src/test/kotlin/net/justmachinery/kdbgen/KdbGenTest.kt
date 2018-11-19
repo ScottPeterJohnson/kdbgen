@@ -15,6 +15,7 @@ import net.justmachinery.kdbgen.dsl.plus
 import net.justmachinery.kdbgen.dsl.uniqueSubquery
 import net.justmachinery.kdbgen.kapt.SqlQuery
 import net.justmachinery.kdbgen.sql.addition
+import net.justmachinery.kdbgen.sql.deleteUser
 import net.justmachinery.kdbgen.sql.insertUser
 import net.justmachinery.kdbgen.sql.selectAllUsers
 import net.justmachinery.kdbgen.test.generated.enums.EnumTypeTest
@@ -27,6 +28,7 @@ import java.util.*
 
 
 @SqlQuery("addition",
+    //language=PostgreSQL
 	"SELECT 1 + :addendum AS foobar"
 )
 @SqlQuery("insertUser",
@@ -34,6 +36,10 @@ import java.util.*
 	"""INSERT INTO users(user_name) VALUES (:name) RETURNING *"""
 )
 @SqlQuery("selectAllUsers", "SELECT * FROM users")
+@SqlQuery("deleteUser",
+    //language=PostgreSQL
+    """DELETE FROM users WHERE user_name = :name"""
+)
 class AnnotationQueriesTest : DatabaseTest() {
 	init {
 		"should be able to do basic operations" {
@@ -41,6 +47,8 @@ class AnnotationQueriesTest : DatabaseTest() {
 				addition(3).first().foobar shouldBe 4
 				insertUser("foobar")
 				selectAllUsers().first().user_name shouldBe "foobar"
+                deleteUser("foobar")
+                selectAllUsers() should beEmpty()
 			}
 		}
 	}
