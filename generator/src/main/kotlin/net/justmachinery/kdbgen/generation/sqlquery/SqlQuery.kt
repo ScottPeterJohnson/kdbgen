@@ -45,82 +45,93 @@ internal class SqlQueryWrapperGenerator(
         return convertTypeRepr(renderingContext.mapPostgresType(name, nullable))
     }
 
+    private val generatedPackageName = "$kdbGen.sql"
     private fun generateCode(){
-        val packageName = "$kdbGen.sql"
-        val builder = FileSpec.builder(packageName, "Queries")
+        val fileBuilder = FileSpec.builder(generatedPackageName, "Queries")
+        fileBuilder.addImport("net.justmachinery.kdbgen.utility", "convertFromResultSetObject")
 
+        val createdOutputClasses = mutableSetOf<ClassName>()
         for(query in queries){
-            val resultClass : ClassName?
-            if(query.outputs.isNotEmpty()) {
-                resultClass = ClassName(packageName, "${query.name.capitalize()}Result")
-                run {
-                    val resultClassBuilder = TypeSpec.classBuilder(resultClass)
-                    resultClassBuilder.addModifiers(KModifier.DATA)
-                    val primaryConstructor = FunSpec.constructorBuilder()
-                    for(column in query.outputs){
-                        val repr = getTypeRepr(column.typeName, column.nullable)
-                        primaryConstructor.addParameter(column.columnName, repr)
-                        resultClassBuilder.addProperty(PropertySpec.builder(column.columnName, repr).initializer(column.columnName).build())
-                    }
-                    resultClassBuilder.primaryConstructor(primaryConstructor.build())
-                    builder.addType(resultClassBuilder.build())
+            val queryHasResult = query.outputs.isNotEmpty()
+            val hasDirectResult = query.outputs.size == 1 && query.outputClassName == null
+
+            val resultWrapperClass =
+                if(query.outputClassName?.packageName == generatedPackageName) query.outputClassName
+                else ClassName(generatedPackageName, "${query.name.capitalize()}Result")
+            if(queryHasResult && !createdOutputClasses.contains(resultWrapperClass)) {
+                //We always define a result class so we can get its types for conversion. It may be private though.
+                createdOutputClasses.add(resultWrapperClass)
+
+                val resultClassBuilder = TypeSpec.classBuilder(resultWrapperClass)
+                resultClassBuilder.addModifiers(KModifier.DATA)
+                if(query.outputClassName != null && resultWrapperClass != query.outputClassName){
+                    resultClassBuilder.addModifiers(KModifier.PRIVATE)
                 }
-            } else {
-                resultClass = null
+
+                val primaryConstructor = FunSpec.constructorBuilder()
+                for(column in query.outputs){
+                    primaryConstructor.addParameter(column.columnName, column.type)
+                    resultClassBuilder.addProperty(PropertySpec.builder(column.columnName, column.type).initializer(column.columnName).build())
+                }
+                resultClassBuilder.primaryConstructor(primaryConstructor.build())
+                fileBuilder.addType(resultClassBuilder.build())
             }
 
+            val function = FunSpec.builder(query.name)
+            function.receiver(ConnectionProvider::class)
 
-            run {
-                val function = FunSpec.builder(query.name)
-                function.receiver(ConnectionProvider::class)
-                if(resultClass != null){
-                    function.returns(List::class.asClassName().parameterizedBy(resultClass))
+            val namedParameters = query.inputs.groupBy { it.parameterName }
+
+            //Sanity check named parameters
+            for(values in namedParameters.values){
+                if(!values.all { it == values.first() }) {
+                    throw RuntimeException("Types of named parameter ${values.first().parameterName} in multiple locations do not match: $values")
                 }
+            }
 
-                val namedParameters = query.inputs.groupBy { it.parameterName }
+            for((name, params) in namedParameters){
+                function.addParameter(name, params.first().type)
+            }
 
-                //Sanity check named parameters
-                for(values in namedParameters.values){
-                    if(!values.all { it == values.first() }) {
-                        throw RuntimeException("Types of named parameter ${values.first().parameterName} in multiple locations do not match: $values")
-                    }
+            function.beginControlFlow("this.getConnection().use")
+            function.addStatement("connection ->")
+            function.beginControlFlow("connection.prepareStatement(%S).use", query.query)
+            function.addStatement("prepared ->")
+            for((index, param) in query.inputs.withIndex()){
+                function.addStatement("prepared.setObject(${index+1}, ${param.parameterName}, ${param.sqlTypeCode})")
+            }
+
+            if(queryHasResult){
+                val result = when {
+                    hasDirectResult -> query.outputs.first().type
+                    query.outputClassName != null -> query.outputClassName
+                    else -> resultWrapperClass
                 }
-
-                for((name, params) in namedParameters){
-                    function.addParameter(name, getTypeRepr(params.first().typeName, params.first().nullable))
+                function.returns(List::class.asClassName().parameterizedBy(result))
+                function.addStatement("val rs = prepared.executeQuery()")
+                function.addStatement("val results = mutableListOf<$result>()")
+                function.beginControlFlow("while(rs.next())")
+                for((index, output) in query.outputs.withIndex()){
+                    function.addStatement("val out$index = convertFromResultSetObject(rs.getObject(${index+1}), $resultWrapperClass::`${output.columnName}`.returnType) as %T", output.type)
                 }
-
-                function.beginControlFlow("this.getConnection().use")
-                    function.addStatement("connection ->")
-                    function.beginControlFlow("connection.prepareStatement(%S).use", query.query)
-                        function.addStatement("prepared ->")
-                        for((index, param) in query.inputs.withIndex()){
-                            function.addStatement("prepared.setObject(${index+1}, ${param.parameterName}, ${param.sqlTypeCode})")
-                        }
-                        if(resultClass != null){
-                            function.addStatement("val rs = prepared.executeQuery()")
-                            function.addStatement("val results = mutableListOf<$resultClass>()")
-                            function.beginControlFlow("while(rs.next())")
-                            for((index, output) in query.outputs.withIndex()){
-                                OutputColumn::columnName.returnType
-                                val repr = getTypeRepr(output.typeName, output.nullable)
-                                function.addStatement("val out$index = net.justmachinery.kdbgen.utility.convertFromResultSetObject(rs.getObject(${index+1}), $resultClass::`${output.columnName}`.returnType) as %T", repr)
-                            }
-                            function.addStatement("results.add($resultClass(${query.outputs.indices.joinToString(", ") { "out$it" }}))")
-                            function.endControlFlow()
-                            function.addStatement("return results")
-                        } else {
-                            function.addStatement("prepared.execute()")
-                        }
-
-                    function.endControlFlow()
+                if(hasDirectResult) {
+                    function.addStatement("results.add(out0)")
+                } else {
+                    function.addStatement("results.add($result(${query.outputs.withIndex().joinToString(", ") { (index, it) -> "`${it.columnName}` = out$index" }}))")
+                }
                 function.endControlFlow()
-
-                builder.addFunction(function.build())
+                function.addStatement("return results")
+            } else {
+                function.addStatement("prepared.execute()")
             }
+
+            function.endControlFlow()
+            function.endControlFlow()
+
+            fileBuilder.addFunction(function.build())
         }
 
-        builder.build().writeTo(File(settings.outputDirectory))
+        fileBuilder.build().writeTo(File(settings.outputDirectory))
     }
 
 /*    private fun generateConvertParameter(outputIndex : Int, output : OutputColumn, funSpec: FunSpec.Builder){
@@ -144,7 +155,7 @@ internal class SqlQueryWrapperGenerator(
 
     private val queries = mutableListOf<SqlQueryData>()
 
-    fun processStatement(name : String, statement : String){
+    fun processStatement(name : String, statement : String, outputClassName : String){
         val (replaced, mapping) = replaceNamedParameters(statement)
 
         val prep = connection.prepareStatement(replaced)
@@ -161,8 +172,7 @@ internal class SqlQueryWrapperGenerator(
                 nullable = false
             }
             InputParameter(
-                typeName = parameterMetaData.getParameterTypeName(it),
-                nullable = nullable,
+                type = getTypeRepr(parameterMetaData.getParameterTypeName(it), nullable),
                 sqlTypeCode = parameterMetaData.getParameterType(it),
                 parameterName = paramName
             )
@@ -171,20 +181,26 @@ internal class SqlQueryWrapperGenerator(
             (1..metaData.columnCount).map {
                 OutputColumn(
                     columnName = metaData.getColumnName(it),
-                    typeName = metaData.getColumnTypeName(it),
-                    nullable = metaData.isNullable(it) == ResultSetMetaData.columnNullable
+                    type = getTypeRepr(metaData.getColumnTypeName(it), metaData.isNullable(it) == ResultSetMetaData.columnNullable)
                 )
             }
         } else {
             listOf()
         }
+
+        val className  = when {
+            outputClassName.contains('.') -> ClassName.bestGuess(outputClassName)
+            outputClassName.isNotBlank() -> ClassName(generatedPackageName, outputClassName)
+            else -> null
+        }
+
         queries.add(
-            SqlQueryData(name, replaced, inputs, outputs)
+            SqlQueryData(name, replaced, inputs, outputs, className)
         )
     }
 
 
-    fun replaceNamedParameters(query: String): Pair<String, Map<Int, String>> {
+    private fun replaceNamedParameters(query: String): Pair<String, Map<Int, String>> {
         val bindings = mutableMapOf<Int, String>()
         val pattern = Pattern.compile(":(\\w+\\??)")
         val matcher = pattern.matcher(query)
@@ -200,6 +216,6 @@ internal class SqlQueryWrapperGenerator(
     }
 }
 
-private data class SqlQueryData(val name : String, val query : String, val inputs : List<InputParameter>, val outputs : List<OutputColumn>)
-private data class InputParameter(val typeName : String, val nullable : Boolean, val sqlTypeCode : Int, val parameterName : String)
-private data class OutputColumn(val columnName : String, val typeName : String, val nullable : Boolean)
+private data class SqlQueryData(val name : String, val query : String, val inputs : List<InputParameter>, val outputs : List<OutputColumn>, val outputClassName : ClassName?)
+private data class InputParameter(val type : TypeName, val sqlTypeCode : Int, val parameterName : String)
+private data class OutputColumn(val columnName : String, val type : TypeName)

@@ -1,5 +1,7 @@
 package net.justmachinery.kdbgen.kapt
 
+import org.intellij.lang.annotations.Language
+
 @Target(AnnotationTarget.CLASS)
 @Retention(AnnotationRetention.SOURCE)
 annotation class GeneratePostgresInterface
@@ -51,8 +53,22 @@ annotation class SqlGenerationSettings(
 @java.lang.annotation.Repeatable(SqlQueries::class)
 @Retention(AnnotationRetention.SOURCE)
 annotation class SqlQuery(
+    /**
+     * Name of the query function to generate/
+     */
     val name : String,
-    val query : String
+    /**
+     * SQL query to run. Anything JDBC will accept.
+     */
+    @Language("PostgreSQL")
+    val query : String,
+    /**
+     * Name of the result class to generate for this query.
+     * If the same name is shared among multiple SqlQuery annotations, they must all have the same outputs.
+     * If fully qualified, an existing class will be used. Its primary constructor should accept the same named parameters.
+     */
+    val resultName : String = ""
+
 )
 
 @Retention(AnnotationRetention.SOURCE)

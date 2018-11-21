@@ -71,8 +71,7 @@ fun sql(cb : ConnectionProvider.()->Unit){
 ### Usage (SQL Query)
 ```kotlin
 @SqlQuery("addition",
-    //The following comment allows for Intellij to highlight syntax:
-    //language=PostgreSQL
+    //Intellij should highlight this with SQL syntax
 	"""SELECT 1 + :addendum AS foobar"""
 )
 val foo = 3 
@@ -98,6 +97,12 @@ to the end of a parameter name. For example, `select * from users where name = :
 
 Keep in mind that nulls are special snowflakes in SQL. The above query for instance will never
 return any rows when passed null.
+
+#### Query result naming
+Assign a name to the query result using the `resultName` parameter of `@SqlQuery`.
+You can either use a simple name (`Foo`) and generate the wrapper class automatically,
+or fully qualify the name (`com.mycompany.Foo`) to use an existing class. Said class should
+have a constructor that accepts exactly the named parameters of the query.
 
 ### Usage (DSL)
 

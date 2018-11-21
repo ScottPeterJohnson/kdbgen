@@ -25,7 +25,7 @@ class SqlQueryProcessor : AbstractProcessorBase() {
                     for(element in elements){
                         for(annotation in element.getAnnotationsByType(SqlQuery::class.java)){
                             try {
-                                generator.processStatement(annotation.name, annotation.query)
+                                generator.processStatement(annotation.name, annotation.query, annotation.resultName)
                             } catch(e : SQLException){
                                 processingEnv.messager.printMessage(Diagnostic.Kind.ERROR, "Could not process query: $e", element)
                             }

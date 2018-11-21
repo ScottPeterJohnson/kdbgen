@@ -14,7 +14,7 @@ plugins {
 }
 
 allprojects {
-	version = "0.7.2"
+	version = "0.7.3"
 	group = "net.justmachinery.kdbgen"
 
 
@@ -86,7 +86,6 @@ allprojects {
 		compile("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.3.10")
 	}
 }
-
 
 val test by tasks.getting(Test::class) {
 	useJUnitPlatform()
