@@ -93,8 +93,8 @@ internal class SqlQueryWrapperGenerator(
                 function.addParameter(name, params.first().type)
             }
 
-            function.beginControlFlow("this.getConnection().use")
-            function.addStatement("connection ->")
+
+            function.addStatement("val connection = this.getConnection()")
             function.beginControlFlow("connection.prepareStatement(%S).use", query.query)
             function.addStatement("prepared ->")
             for((index, param) in query.inputs.withIndex()){
@@ -125,7 +125,6 @@ internal class SqlQueryWrapperGenerator(
                 function.addStatement("prepared.execute()")
             }
 
-            function.endControlFlow()
             function.endControlFlow()
 
             fileBuilder.addFunction(function.build())

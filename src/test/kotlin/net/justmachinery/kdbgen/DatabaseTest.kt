@@ -23,15 +23,12 @@ private const val TEST_DATABASE_URL : String = "jdbc:postgresql://localhost:5432
 )
 abstract class DatabaseTest : AbstractSpec(), IntelliMarker {
 	val connection = DriverManager.getConnection(TEST_DATABASE_URL, Properties()) as PgConnection
-	private val dummyConnection = object : Connection by connection {
-		override fun close() {}
-	}
 	init {
 		connection.autoCommit = false
 	}
 	val connectionProvider = object : ConnectionProvider {
 		override fun getConnection(): Connection {
-			return dummyConnection
+			return connection
 		}
 	}
 	fun sql(cb : ConnectionProvider.()->Unit){
