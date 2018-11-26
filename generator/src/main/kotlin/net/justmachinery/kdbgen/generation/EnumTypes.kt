@@ -24,8 +24,8 @@ fun generateEnumTypes(connection: PgConnection): List<EnumType> {
 }
 
 fun renderEnumType(settings : Settings, type : EnumType){
-	val output = File("${settings.enumDirectory()}/${type.className}.kt")
+	val output = File("${settings.outputDirectory}/${type.className}.kt")
 	output.parentFile.mkdirs()
 	output.createNewFile()
-	output.writeText("package ${settings.enumPackage};\nenum class ${type.className} { ${type.values.joinToString(", ")} }")
+	output.writeText("package ${settings.outputPackage};\nenum class ${type.className} { ${type.values.joinToString(", ")} }")
 }

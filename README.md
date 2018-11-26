@@ -1,15 +1,11 @@
 [ ![Download](https://api.bintray.com/packages/scottpjohnson/generic/kdbgen/images/download.svg) ](https://bintray.com/scottpjohnson/generic/kdbgen-core/_latestVersion)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
  
- Experimental library for generating Kotlin code to interact with a Postgres database. 
- Currently supports two methods:
-  - Arbitrary SQL transformed into Kotlin functions
-  - A somewhat limited DSL generator
+ Experimental library for writing Postgres-compatible SQL in Kotlin via annotation processing. 
+ Basically, turns SQL statements into type-checked functions at compile time.
  
- The arbitrary SQL method is probably the far more powerful and elegant. The DSL generation may be repurposed or scrapped.
- 
- The basic philosophy is:
- - The database should be the source of truth for Kotlin objects representing its rows, so those should be generated automatically.
+ The underlying philosophy is:
+ - Databases understand their schemas already, so you shouldn't have to write more code describing your tables 
  - Queries should be known safe at compile time.
  - SQL is a fine language for writing SQL.
  
@@ -42,10 +38,6 @@ Add the following annotation anywhere in your project:
 private class GeneratePostgres
 ```
 
-If DSL generation is desired, add:
-```kotlin
-@GeneratePostgresInterface
-```
 You will need to replace:
 - `DATABASE`, `DATABASE_USER`, `DATABASE_PASSWORD` with an accessible database/user/password (a local one, probably)
 - `<VERSION>` with the latest version of this repository (currently [ ![Download](https://api.bintray.com/packages/scottpjohnson/generic/kdbgen/images/download.svg) ](https://bintray.com/scottpjohnson/generic/kdbgen-core/_latestVersion))
@@ -54,17 +46,19 @@ Other configuration options are available on as properties on the Settings annot
 
 ### Setup
 ```kotlin
-//Any method of getting a connection will suffice. Using basic JDBC:
-val connectionProvider = object : ConnectionProvider {
+//Any method of getting a connection will suffice. 
+//Using basic JDBC and a helper function to bring things into scope: 
+fun sql(
     //A connection provider is just a basic wrapper for obtaining a connection.
     //For efficiency, you probably want a connection pool.
-    override fun getConnection(): Connection {
-        return DriverManager.getConnection(DATABASE_URL, Properties()) as PgConnection
+    //Note that the connectionProvider does not close() the connection.
+    cb : ConnectionProvider.()->Unit
+){
+    DriverManager.getConnection(DATABASE_URL, Properties()).use {
+        cb(object : ConnectionProvider {
+            override fun getConnection() = it        
+        })    
     }
-}
-//This will bring relevant functions into scope
-fun sql(cb : ConnectionProvider.()->Unit){
-    cb(connectionProvider)
 }
 ```
 
@@ -82,6 +76,19 @@ val foo = 3
 fun test(){
     sql {
         addition(addendum = 3).first().foobar //4
+    }
+}
+
+//To more cleanly give your queries a class-limited scope:
+@QueryContainer
+//The annotation generates a ${ClassName}Queries interface that the actual class can implement,
+//which gives access to the query functions defined in its body.
+class QueryObject : QueryObjectQueries {
+    @SqlQuery("queryImpl", "SELECT * FROM sometable")
+    fun doQuery(){
+        sql {
+            queryImpl()
+        }
     }
 }
 
@@ -103,134 +110,6 @@ Assign a name to the query result using the `resultName` parameter of `@SqlQuery
 You can either use a simple name (`Foo`) and generate the wrapper class automatically,
 or fully qualify the name (`com.mycompany.Foo`) to use an existing class. Said class should
 have a constructor that accepts exactly the named parameters of the query.
-
-### Usage (DSL)
-
-You can probably ignore the DSL. It doesn't support many Postgres features.
-
- Assume a basic users table with mandatory "uid", "email_address", and optional "name" fields.
- 
-
-#### Select user
-```kotlin
-sql {
-    //Find the user named "test". This will return a convenience data class containing all columns.
-    usersTable.select {
-        where {
-            userName equalTo parameter("test")
-        }
-        returning(`*`)
-    }.value()
-
-    //Find the emails of all users named "John Smith". This will return just the email column.
-    val email = usersTable.select {
-        where { userName equalTo parameter("John Smith") }
-        returning(emailAddress)
-    }.values()
-
-    //Both email and user ID, wrapped in a tuple like structure.
-    val results = usersTable.select { returning(userId, emailAddress) }.list()
-    results.map { it.first } //UID
-    results.map { it.second } //Email
-}
-```
-
-#### Insert user
-```kotlin
-sql {
-    usersTable.insert {
-        //Since "name" is optional, we don't have to provide it as an argument to this insert helper method.
-        values(userName = "test", emailAddress = "foo@bar")
-        returningNothing()
-    }.execute()
-
-    //Add multiple users:
-    val users = listOf("test", "test2", "test3")
-    usersTable.insert {
-        //Can insert using the convenience row class
-        //(Generated values must be supplied if manually constructed)
-        values(UsersRow(userName = "test0", emailAddress = "foo@bar.org", userId = 2, addressId = null))
-        for (user in users) {
-            values(userName = user, emailAddress = "$user@test.org")
-        }
-        returningNothing()
-    }.execute()
-}
-```
-
-#### Update user
-```kotlin
-sql {
-
-    usersTable.update {
-        userName setTo parameter("Joe Smith")
-        where {
-            userName equalTo parameter("test")
-        }
-        returning(userId)
-    }.values()
-}
-```
-
-#### Delete user
-```kotlin
-sql {
-
-    usersTable.delete {
-        where {
-            userName equalTo parameter("test")
-        }
-        returningNothing()
-    }.execute()
-}
-```
-
-#### Join tables
-```kotlin
-sql {
-
-    usersTable.select {
-        val addresses = join(addressesTable)
-        where {
-            userName equalTo parameter("test")
-            //The join condition
-            addressId equalTo addresses.addressId
-            addresses.state equalTo parameter("CA")
-        }
-        returning(`*`)
-    }.list()
-
-}
-```
-
-#### Upsert / Conflict Clause
-```kotlin
-sql {
-    usersTable.insert {
-        values(userName = "John Smith", emailAddress = "foo@bar.com")
-        //Currently only supports column inferred constraints
-        onConflictDoUpdate(userName){ excluded ->
-            emailAddress setTo excluded.emailAddress
-        }
-        returningNothing()
-    }
-}
-
-```
-
-## Configuration
-### Multiplatform Kotlin
-To use the generated DSL convenience row types in a multiplatform Kotlin project (JS + JVM + Shared code), kdbgen should be a dependency of the JVM project, 
-the `useCommonTypes` flag should be enabled if any of your columns are timestamps or UUIDs, the `--outputDirectory` should point to the shared project's generated sources,
-and `dslDirectory` should be set to the JVM project's generated sources. 
-
-### Serialization
-Add `dataAnnotation=["kotlinx.serialization.Serializable"]`, to use generated classes with 
-with kotlinx-serialization.
-
-
-## Caveats
-- Library syntax may change.
 
 ## TODO
 - Transforming result sets could be a little more efficient

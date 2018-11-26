@@ -1,11 +1,11 @@
 package net.justmachinery.kdbgen.generation.sqlquery
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
-import net.justmachinery.kdbgen.dsl.ConnectionProvider
+import net.justmachinery.kdbgen.ConnectionProvider
 import net.justmachinery.kdbgen.generation.RenderingContext
 import net.justmachinery.kdbgen.generation.Settings
 import net.justmachinery.kdbgen.generation.generateEnumTypes
-import net.justmachinery.kdbgen.kdbGen
+import net.justmachinery.kdbgen.kapt.SqlQuery
 import org.postgresql.jdbc.PgConnection
 import java.io.File
 import java.sql.Connection
@@ -45,23 +45,25 @@ internal class SqlQueryWrapperGenerator(
         return convertTypeRepr(renderingContext.mapPostgresType(name, nullable))
     }
 
-    private val generatedPackageName = "$kdbGen.sql"
+    private val generatedPackageName = "net.justmachinery.kdbgen.sql"
     private fun generateCode(){
         val fileBuilder = FileSpec.builder(generatedPackageName, "Queries")
-        fileBuilder.addImport("net.justmachinery.kdbgen.utility", "convertFromResultSetObject")
+        fileBuilder.addImport("net.justmachinery.kdbgen.utility", "convertFromResultSetObject", "convertToParameterType")
 
-        val createdOutputClasses = mutableSetOf<ClassName>()
-        for(query in queries){
+        val globallyOutputtedClasses = mutableSetOf<ClassName>()
+        fun generateQueryCode(query : SqlQueryData) : Pair<TypeSpec?, FunSpec> {
             val queryHasResult = query.outputs.isNotEmpty()
             val hasDirectResult = query.outputs.size == 1 && query.outputClassName == null
+            val shouldGenerateGlobalExplicitlyNamedResultWrapper = query.outputClassName?.packageName == generatedPackageName
 
+            //We always define a result class so that we can get its types for conversion, even if the query only returns
+            //one column or returns an explicitly named user data class.
             val resultWrapperClass =
-                if(query.outputClassName?.packageName == generatedPackageName) query.outputClassName
+                if(shouldGenerateGlobalExplicitlyNamedResultWrapper) query.outputClassName!!
                 else ClassName(generatedPackageName, "${query.name.capitalize()}Result")
-            if(queryHasResult && !createdOutputClasses.contains(resultWrapperClass)) {
-                //We always define a result class so we can get its types for conversion. It may be private though.
-                createdOutputClasses.add(resultWrapperClass)
+            var localResultClass : TypeSpec? = null
 
+            if(queryHasResult && !globallyOutputtedClasses.contains(resultWrapperClass)) {
                 val resultClassBuilder = TypeSpec.classBuilder(resultWrapperClass)
                 resultClassBuilder.addModifiers(KModifier.DATA)
                 if(query.outputClassName != null && resultWrapperClass != query.outputClassName){
@@ -74,7 +76,13 @@ internal class SqlQueryWrapperGenerator(
                     resultClassBuilder.addProperty(PropertySpec.builder(column.columnName, column.type).initializer(column.columnName).build())
                 }
                 resultClassBuilder.primaryConstructor(primaryConstructor.build())
-                fileBuilder.addType(resultClassBuilder.build())
+
+                if(shouldGenerateGlobalExplicitlyNamedResultWrapper){
+                    fileBuilder.addType(resultClassBuilder.build())
+                    globallyOutputtedClasses.add(resultWrapperClass)
+                } else {
+                    localResultClass = resultClassBuilder.build()
+                }
             }
 
             val function = FunSpec.builder(query.name)
@@ -98,7 +106,7 @@ internal class SqlQueryWrapperGenerator(
             function.beginControlFlow("connection.prepareStatement(%S).use", query.query)
             function.addStatement("prepared ->")
             for((index, param) in query.inputs.withIndex()){
-                function.addStatement("prepared.setObject(${index+1}, ${param.parameterName}, ${param.sqlTypeCode})")
+                function.addStatement("prepared.setObject(${index+1}, convertToParameterType(${param.parameterName}, \"${param.sqlTypeName}\", connection), ${param.sqlTypeCode})")
             }
 
             if(queryHasResult){
@@ -112,7 +120,7 @@ internal class SqlQueryWrapperGenerator(
                 function.addStatement("val results = mutableListOf<$result>()")
                 function.beginControlFlow("while(rs.next())")
                 for((index, output) in query.outputs.withIndex()){
-                    function.addStatement("val out$index = convertFromResultSetObject(rs.getObject(${index+1}), $resultWrapperClass::`${output.columnName}`.returnType) as %T", output.type)
+                    function.addStatement("val out$index = convertFromResultSetObject(rs.getObject(${index+1}), ${resultWrapperClass.simpleName}::`${output.columnName}`.returnType) as %T", output.type)
                 }
                 if(hasDirectResult) {
                     function.addStatement("results.add(out0)")
@@ -127,24 +135,27 @@ internal class SqlQueryWrapperGenerator(
 
             function.endControlFlow()
 
-            fileBuilder.addFunction(function.build())
+            return Pair(localResultClass, function.build())
+        }
+
+        for(query in globalQueries){
+            val (resultClass, functionSpec) = generateQueryCode(query)
+            resultClass?.let { fileBuilder.addType(it) }
+            fileBuilder.addFunction(functionSpec)
+        }
+
+        for(container in containerQueries){
+            val queryContainerInterface = TypeSpec.interfaceBuilder(container.containerInterfaceName)
+            for(query in container.contents){
+                val (resultClass, functionSpec) = generateQueryCode(query)
+                resultClass?.let { queryContainerInterface.addType(it) }
+                queryContainerInterface.addFunction(functionSpec)
+            }
+            fileBuilder.addType(queryContainerInterface.build())
         }
 
         fileBuilder.build().writeTo(File(settings.outputDirectory))
     }
-
-/*    private fun generateConvertParameter(outputIndex : Int, output : OutputColumn, funSpec: FunSpec.Builder){
-        val repr = getTypeRepr(output.typeName, output.nullable)
-        funSpec.beginControlFlow("val ${output.columnName} : %T = when(val obj = resultSet.getObject($outputIndex))")
-        if(repr.nullable){
-            funSpec.addStatement("null -> null")
-        }
-        if(output.typeName.startsWith("_") *//* Array *//*){
-
-        }
-        funSpec.addStatement("else -> obj")
-        funSpec.endControlFlow()
-    }*/
 
     override fun close() {
         generateCode()
@@ -152,9 +163,24 @@ internal class SqlQueryWrapperGenerator(
         connection.close()
     }
 
-    private val queries = mutableListOf<SqlQueryData>()
+    private val globalQueries = mutableListOf<SqlQueryData>()
+    private val containerQueries = mutableListOf<QueryContainerContents>()
 
-    fun processStatement(name : String, statement : String, outputClassName : String){
+    fun processGlobalStatement(query : SqlQuery){
+        globalQueries.add(
+            getMetadata(query)
+        )
+    }
+
+    fun processQueryContainer(containerName : String, queries : List<SqlQuery>){
+        containerQueries.add(QueryContainerContents(containerName, queries.map { getMetadata(it) }))
+    }
+
+    private fun getMetadata(query : SqlQuery) : SqlQueryData {
+        val name = query.name
+        val statement = query.query
+        val outputClassName = query.resultName
+
         val (replaced, mapping) = replaceNamedParameters(statement)
 
         val prep = connection.prepareStatement(replaced)
@@ -172,6 +198,7 @@ internal class SqlQueryWrapperGenerator(
             }
             InputParameter(
                 type = getTypeRepr(parameterMetaData.getParameterTypeName(it), nullable),
+                sqlTypeName = parameterMetaData.getParameterTypeName(it),
                 sqlTypeCode = parameterMetaData.getParameterType(it),
                 parameterName = paramName
             )
@@ -192,10 +219,7 @@ internal class SqlQueryWrapperGenerator(
             outputClassName.isNotBlank() -> ClassName(generatedPackageName, outputClassName)
             else -> null
         }
-
-        queries.add(
-            SqlQueryData(name, replaced, inputs, outputs, className)
-        )
+        return SqlQueryData(name, replaced, inputs, outputs, className)
     }
 
 
@@ -216,5 +240,7 @@ internal class SqlQueryWrapperGenerator(
 }
 
 private data class SqlQueryData(val name : String, val query : String, val inputs : List<InputParameter>, val outputs : List<OutputColumn>, val outputClassName : ClassName?)
-private data class InputParameter(val type : TypeName, val sqlTypeCode : Int, val parameterName : String)
+private data class InputParameter(val type : TypeName, val sqlTypeName : String, val sqlTypeCode : Int, val parameterName : String)
 private data class OutputColumn(val columnName : String, val type : TypeName)
+
+private data class QueryContainerContents(val containerInterfaceName : String, val contents : List<SqlQueryData>)
