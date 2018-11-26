@@ -51,7 +51,7 @@ internal class SqlQueryWrapperGenerator(
         fileBuilder.addImport("net.justmachinery.kdbgen.utility", "convertFromResultSetObject", "convertToParameterType")
 
         val globallyOutputtedClasses = mutableSetOf<ClassName>()
-        fun generateQueryCode(query : SqlQueryData) : Pair<TypeSpec?, FunSpec> {
+        fun generateQueryCode(containerName : String?, query : SqlQueryData) : Pair<TypeSpec?, FunSpec> {
             val queryHasResult = query.outputs.isNotEmpty()
             val hasDirectResult = query.outputs.size == 1 && query.outputClassName == null
             val shouldGenerateGlobalExplicitlyNamedResultWrapper = query.outputClassName?.packageName == generatedPackageName
@@ -59,8 +59,11 @@ internal class SqlQueryWrapperGenerator(
             //We always define a result class so that we can get its types for conversion, even if the query only returns
             //one column or returns an explicitly named user data class.
             val resultWrapperClass =
-                if(shouldGenerateGlobalExplicitlyNamedResultWrapper) query.outputClassName!!
-                else ClassName(generatedPackageName, "${query.name.capitalize()}Result")
+                when {
+                    shouldGenerateGlobalExplicitlyNamedResultWrapper -> query.outputClassName!!
+                    containerName != null -> ClassName(generatedPackageName, containerName, "${query.name.capitalize()}Result")
+                    else -> ClassName(generatedPackageName, "${query.name.capitalize()}Result")
+                }
             var localResultClass : TypeSpec? = null
 
             if(queryHasResult && !globallyOutputtedClasses.contains(resultWrapperClass)) {
@@ -139,7 +142,7 @@ internal class SqlQueryWrapperGenerator(
         }
 
         for(query in globalQueries){
-            val (resultClass, functionSpec) = generateQueryCode(query)
+            val (resultClass, functionSpec) = generateQueryCode(null, query)
             resultClass?.let { fileBuilder.addType(it) }
             fileBuilder.addFunction(functionSpec)
         }
@@ -147,7 +150,7 @@ internal class SqlQueryWrapperGenerator(
         for(container in containerQueries){
             val queryContainerInterface = TypeSpec.interfaceBuilder(container.containerInterfaceName)
             for(query in container.contents){
-                val (resultClass, functionSpec) = generateQueryCode(query)
+                val (resultClass, functionSpec) = generateQueryCode(container.containerInterfaceName, query)
                 resultClass?.let { queryContainerInterface.addType(it) }
                 queryContainerInterface.addFunction(functionSpec)
             }

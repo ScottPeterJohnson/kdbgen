@@ -55,7 +55,12 @@ annotation class SqlQuery(
 @Target(
     AnnotationTarget.CLASS,
     AnnotationTarget.TYPE,
-    AnnotationTarget.PROPERTY
+    AnnotationTarget.PROPERTY,
+    AnnotationTarget.FUNCTION,
+    AnnotationTarget.CONSTRUCTOR,
+    AnnotationTarget.FIELD,
+    AnnotationTarget.PROPERTY_GETTER,
+    AnnotationTarget.PROPERTY_SETTER
 )
 annotation class SqlQueries(vararg val value : SqlQuery)
 
