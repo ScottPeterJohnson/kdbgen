@@ -11,11 +11,7 @@ annotation class SqlGenerationSettings(
      * Directory to output generated source files to
      * Defaults to kapt
      */
-    val outputDirectory : String = "",
-    /**
-     * Package to output beans and DSL to
-     */
-    val outputPackage : String = "net.justmachinery.kdbgen"
+    val outputDirectory : String = ""
 )
 
 @Suppress("DEPRECATED_JAVA_ANNOTATION")

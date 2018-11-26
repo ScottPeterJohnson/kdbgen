@@ -2,9 +2,7 @@ package net.justmachinery.kdbgen.generation.sqlquery
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import net.justmachinery.kdbgen.ConnectionProvider
-import net.justmachinery.kdbgen.generation.RenderingContext
-import net.justmachinery.kdbgen.generation.Settings
-import net.justmachinery.kdbgen.generation.generateEnumTypes
+import net.justmachinery.kdbgen.generation.*
 import net.justmachinery.kdbgen.kapt.SqlQuery
 import org.postgresql.jdbc.PgConnection
 import java.io.File
@@ -18,6 +16,7 @@ internal class SqlQueryWrapperGenerator(
     private val settings : Settings
 ) : AutoCloseable {
     private val connection : Connection
+    private val enumTypes : List<EnumType>
     private val renderingContext : RenderingContext
     init {
         DriverManager.registerDriver(org.postgresql.Driver())
@@ -27,7 +26,7 @@ internal class SqlQueryWrapperGenerator(
         ) as PgConnection
         connection.autoCommit = false
 
-        val enumTypes = generateEnumTypes(connection)
+        enumTypes = generateEnumTypes(connection)
         renderingContext = RenderingContext(settings, enumTypes)
     }
 
@@ -49,6 +48,8 @@ internal class SqlQueryWrapperGenerator(
     private fun generateCode(){
         val fileBuilder = FileSpec.builder(generatedPackageName, "Queries")
         fileBuilder.addImport("net.justmachinery.kdbgen.utility", "convertFromResultSetObject", "convertToParameterType")
+
+        renderEnumTypes(fileBuilder, enumTypes)
 
         val globallyOutputtedClasses = mutableSetOf<ClassName>()
         fun generateQueryCode(containerName : String?, query : SqlQueryData) : Pair<TypeSpec?, FunSpec> {
@@ -184,9 +185,9 @@ internal class SqlQueryWrapperGenerator(
         val statement = query.query
         val outputClassName = query.resultName
 
-        val (replaced, mapping) = replaceNamedParameters(statement)
+        val (replacedQuery, mapping) = replaceNamedParameters(statement)
 
-        val prep = connection.prepareStatement(replaced)
+        val prep = connection.prepareStatement(replacedQuery)
         val metaData : ResultSetMetaData? = prep.metaData
         val parameterMetaData = prep.parameterMetaData!!
 
@@ -222,23 +223,41 @@ internal class SqlQueryWrapperGenerator(
             outputClassName.isNotBlank() -> ClassName(generatedPackageName, outputClassName)
             else -> null
         }
-        return SqlQueryData(name, replaced, inputs, outputs, className)
+
+        val finalQuery = castEnumParameters(statement, inputs)
+
+        return SqlQueryData(name, finalQuery, inputs, outputs, className)
     }
 
 
     private fun replaceNamedParameters(query: String): Pair<String, Map<Int, String>> {
         val bindings = mutableMapOf<Int, String>()
-        val pattern = Pattern.compile(":(\\w+\\??)")
-        val matcher = pattern.matcher(query)
-
+        val transformed = overNamedParameters(query){parameterName ->
+            bindings[bindings.size+1] = parameterName
+            "?"
+        }
+        return Pair(transformed, bindings)
+    }
+    private fun castEnumParameters(originalQuery: String, typeInfo : List<InputParameter>): String {
+        val typeInfoIter = typeInfo.iterator()
+        return overNamedParameters(originalQuery) {
+            val info = typeInfoIter.next()
+            if(renderingContext.postgresTypeToEnum.containsKey(info.sqlTypeName)){
+                "CAST(? AS ${info.sqlTypeName})"
+            } else {
+                "?"
+            }
+        }
+    }
+    private fun overNamedParameters(query : String, replacement : (String)->String) : String {
+        val matcher = Pattern.compile(":(\\w+\\??)").matcher(query)
         val transformed = StringBuilder()
         while (matcher.find()) {
             val parameterName = matcher.group(1)
-            bindings[bindings.size+1] = parameterName
-            matcher.appendReplacement(transformed, "?")
+            matcher.appendReplacement(transformed, replacement(parameterName))
         }
         matcher.appendTail(transformed)
-        return Pair(transformed.toString(), bindings)
+        return transformed.toString()
     }
 }
 

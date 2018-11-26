@@ -5,8 +5,8 @@ import io.kotlintest.should
 import io.kotlintest.shouldBe
 import net.justmachinery.kdbgen.kapt.QueryContainer
 import net.justmachinery.kdbgen.kapt.SqlQuery
-import net.justmachinery.kdbgen.sql.*
-
+import net.justmachinery.kdbgen.sql.AnnotationQueriesTestQueries
+import net.justmachinery.kdbgen.sql.EnumTypeTest
 
 
 data class CustomClass(val user_name : String)
@@ -58,7 +58,19 @@ class AnnotationQueriesTest : DatabaseTest(), AnnotationQueriesTestQueries {
 		}
 	}
 
+	@SqlQuery("enumTestInsert", /* language=PostgreSQL */ """INSERT INTO enum_test (enum_test) VALUES (:enumTestValue)""")
+	@SqlQuery("enumTestSelect", "SELECT * FROM enum_test")
+	fun enums(){
+		"enums should work" {
+			sql {
+				enumTestInsert(EnumTypeTest.test2)
+				enumTestSelect().first().enum_test shouldBe EnumTypeTest.test2
+			}
+		}
+	}
+
 	init {
 		test()
+		enums()
 	}
 }

@@ -66,8 +66,7 @@ class SqlQueryProcessor : AbstractProcessor() {
                 val annotation = annotations.first().getAnnotation(SqlGenerationSettings::class.java)
                 cb(Settings(
                     databaseUrl = annotation.databaseUrl,
-                    outputDirectory = annotation.outputDirectory.nullIfEmpty() ?: kaptKotlinGeneratedDir,
-                    outputPackage = annotation.outputPackage
+                    outputDirectory = annotation.outputDirectory.nullIfEmpty() ?: kaptKotlinGeneratedDir
                 ))
             }
         }

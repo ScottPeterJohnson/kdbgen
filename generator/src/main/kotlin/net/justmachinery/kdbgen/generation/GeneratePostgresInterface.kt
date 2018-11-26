@@ -13,8 +13,7 @@ import java.util.*
 
 data class Settings(
 	val databaseUrl : String,
-	val outputDirectory : String,
-	val outputPackage : String
+	val outputDirectory : String
 )
 
 internal class RenderingContext(
@@ -57,7 +56,7 @@ internal class RenderingContext(
 
 		if (postgresTypeToEnum.containsKey(postgresType)) {
 			return TypeRepr(
-					"${settings.outputPackage}.${postgresTypeToEnum[postgresType]!!.className}",
+					"net.justmachinery.kdbgen.sql.${postgresTypeToEnum[postgresType]!!.className}",
 					nullable,
 					emptyList()
 			)

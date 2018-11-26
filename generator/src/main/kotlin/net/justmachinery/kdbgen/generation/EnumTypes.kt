@@ -1,7 +1,8 @@
 package net.justmachinery.kdbgen.generation
 
+import com.squareup.kotlinpoet.FileSpec
+import com.squareup.kotlinpoet.TypeSpec
 import org.postgresql.jdbc.PgConnection
-import java.io.File
 
 data class EnumType(val className : String, val postgresName : String, val values: List<String>)
 
@@ -23,9 +24,12 @@ fun generateEnumTypes(connection: PgConnection): List<EnumType> {
 	return userEnumTypes
 }
 
-fun renderEnumType(settings : Settings, type : EnumType){
-	val output = File("${settings.outputDirectory}/${type.className}.kt")
-	output.parentFile.mkdirs()
-	output.createNewFile()
-	output.writeText("package ${settings.outputPackage};\nenum class ${type.className} { ${type.values.joinToString(", ")} }")
+fun renderEnumTypes(builder : FileSpec.Builder, types : List<EnumType>){
+	for(type in types){
+		val enum = TypeSpec.enumBuilder(type.className)
+		for(value in type.values){
+			enum.addEnumConstant(value)
+		}
+		builder.addType(enum.build())
+	}
 }
