@@ -65,7 +65,9 @@ fun sql(
 ### Usage (SQL Query)
 ```kotlin
 @SqlQuery("addition",
-    //Intellij should highlight this with SQL syntax
+    //Intellij should highlight this with SQL syntax.
+    //You may need to prompt it, e.g. with the comment line:
+    //language=PostgreSQL
 	"""SELECT 1 + :addendum AS foobar"""
 )
 val foo = 3 
