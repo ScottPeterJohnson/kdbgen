@@ -42,6 +42,9 @@ class AnnotationQueriesTest : DatabaseTest(), AnnotationQueriesTestQueries {
 	@SqlQuery("foobaz",
 		"SELECT 1 + :addendum AS foobar"
 	)
+	@SqlQuery("casting",
+		"SELECT '1' || 3::text AS foobar"
+	)
 	fun test(){
 		"should be able to do basic operations" {
 			sql {
@@ -54,6 +57,7 @@ class AnnotationQueriesTest : DatabaseTest(), AnnotationQueriesTestQueries {
 				deleteUser("foobar")
 				selectAllUsers() should beEmpty()
 				foobaz(3)
+				casting().first() shouldBe "13"
 			}
 		}
 	}
