@@ -3,7 +3,6 @@ package net.justmachinery.kdbgen.kapt
 import com.google.auto.service.AutoService
 import net.justmachinery.kdbgen.generation.Settings
 import net.justmachinery.kdbgen.generation.sqlquery.SqlQueryWrapperGenerator
-import java.sql.SQLException
 import javax.annotation.processing.*
 import javax.lang.model.SourceVersion
 import javax.lang.model.element.Element
@@ -21,7 +20,12 @@ class SqlQueryProcessor : AbstractProcessor() {
         val annotatedElements = roundEnv.getElementsAnnotatedWith(SqlQuery::class.java).union(roundEnv.getElementsAnnotatedWith(SqlQueries::class.java))
         if(annotatedElements.isNotEmpty()){
             withGenerationSettings(roundEnv){ settings ->
-                SqlQueryWrapperGenerator(settings).use { generator ->
+                try {
+                    SqlQueryWrapperGenerator(processingEnv.messager, settings)
+                } catch(t : Throwable){
+                    processingEnv.messager.printMessage(Diagnostic.Kind.ERROR, "Could not run kdbgen: $t")
+                    null
+                }?.use { generator ->
                     val elementsByContainer = annotatedElements.groupBy {
                         it.queryContainerParent()
                     }
@@ -29,17 +33,19 @@ class SqlQueryProcessor : AbstractProcessor() {
                         if(container == null){
                             for(element in elements){
                                 for(annotation in element.getAnnotationsByType(SqlQuery::class.java)){
-                                    try {
-                                        generator.processGlobalStatement(annotation)
-                                    } catch(e : SQLException){
-                                        processingEnv.messager.printMessage(Diagnostic.Kind.ERROR, "Could not process query: $e", element)
-                                    }
+                                    generator.processGlobalStatement(annotation, element)
                                 }
                             }
                         } else {
                             val klazz = container as TypeElement
                             val queryInterfaceName = klazz.simpleName.toString() + "Queries"
-                            generator.processQueryContainer(queryInterfaceName, elements.flatMap { it.getAnnotationsByType(SqlQuery::class.java).toList() })
+                            generator
+                                .processQueryContainer(
+                                    queryInterfaceName,
+                                    elements.flatMap { el ->
+                                        el.getAnnotationsByType(SqlQuery::class.java).map { Pair(it, el) }.toList()
+                                    }
+                                )
                         }
                     }
                 }

@@ -5,8 +5,8 @@ dependencies {
 	//cannot be customized in the way I'd like. And also, if there's more than one publication in a project, Gradle has no
 	//real mechanism for disambiguating which jar to use. So...
 	//Uncomment the :core dependency while developing, uncomment the Maven one while publishing. :)
-	//compile("net.justmachinery.kdbgen:kdbgen-core:$version")
-	compile(project(":core"))
+	compile("net.justmachinery.kdbgen:kdbgen-core:$version")
+	//compile(project(":core"))
 	implementation("org.postgresql:postgresql:42.2.5")
 	implementation("org.jetbrains.kotlin:kotlin-reflect:1.3.10")
 	implementation("com.google.auto.service:auto-service:1.0-rc4")

@@ -11,8 +11,12 @@ import java.sql.DriverManager
 import java.sql.ResultSetMetaData
 import java.util.*
 import java.util.regex.Pattern
+import javax.annotation.processing.Messager
+import javax.lang.model.element.Element
+import javax.tools.Diagnostic
 
 internal class SqlQueryWrapperGenerator(
+    private val messager : Messager,
     private val settings : Settings
 ) : AutoCloseable {
     private val connection : Connection
@@ -24,7 +28,6 @@ internal class SqlQueryWrapperGenerator(
             settings.databaseUrl,
             Properties()
         ) as PgConnection
-        connection.autoCommit = false
 
         enumTypes = generateEnumTypes(connection)
         renderingContext = RenderingContext(settings, enumTypes)
@@ -52,7 +55,7 @@ internal class SqlQueryWrapperGenerator(
         renderEnumTypes(fileBuilder, enumTypes)
 
         val globallyOutputtedClasses = mutableSetOf<ClassName>()
-        fun generateQueryCode(containerName : String?, query : SqlQueryData) : Pair<TypeSpec?, FunSpec> {
+        fun generateQueryCode(containerName : String?, query : SqlQueryData) : Pair<TypeSpec?, FunSpec>? {
             val queryHasResult = query.outputs.isNotEmpty()
             val hasDirectResult = query.outputs.size == 1 && query.outputClassName == null
             val shouldGenerateGlobalExplicitlyNamedResultWrapper = query.outputClassName?.packageName == generatedPackageName
@@ -97,7 +100,12 @@ internal class SqlQueryWrapperGenerator(
             //Sanity check named parameters
             for(values in namedParameters.values){
                 if(!values.all { it == values.first() }) {
-                    throw RuntimeException("Types of named parameter ${values.first().parameterName} in multiple locations do not match: $values")
+                    messager.printMessage(
+                        Diagnostic.Kind.ERROR,
+                        "In query ${query.name}, types of named parameter ${values.first().parameterName} in multiple locations do not match: $values",
+                        query.element
+                    )
+                    return null
                 }
             }
 
@@ -143,17 +151,19 @@ internal class SqlQueryWrapperGenerator(
         }
 
         for(query in globalQueries){
-            val (resultClass, functionSpec) = generateQueryCode(null, query)
-            resultClass?.let { fileBuilder.addType(it) }
-            fileBuilder.addFunction(functionSpec)
+            generateQueryCode(null, query)?.let { (resultClass, functionSpec) ->
+                resultClass?.let { fileBuilder.addType(it) }
+                fileBuilder.addFunction(functionSpec)
+            }
         }
 
         for(container in containerQueries){
             val queryContainerInterface = TypeSpec.interfaceBuilder(container.containerInterfaceName)
             for(query in container.contents){
-                val (resultClass, functionSpec) = generateQueryCode(container.containerInterfaceName, query)
-                resultClass?.let { queryContainerInterface.addType(it) }
-                queryContainerInterface.addFunction(functionSpec)
+                generateQueryCode(container.containerInterfaceName, query)?.let { (resultClass, functionSpec) ->
+                    resultClass?.let { queryContainerInterface.addType(it) }
+                    queryContainerInterface.addFunction(functionSpec)
+                }
             }
             fileBuilder.addType(queryContainerInterface.build())
         }
@@ -163,70 +173,78 @@ internal class SqlQueryWrapperGenerator(
 
     override fun close() {
         generateCode()
-        connection.rollback()
         connection.close()
     }
 
     private val globalQueries = mutableListOf<SqlQueryData>()
     private val containerQueries = mutableListOf<QueryContainerContents>()
 
-    fun processGlobalStatement(query : SqlQuery){
-        globalQueries.add(
-            getMetadata(query)
-        )
+    fun processGlobalStatement(query : SqlQuery, element : Element){
+        getMetadata(query, element)?.let { globalQueries.add(it) }
     }
 
-    fun processQueryContainer(containerName : String, queries : List<SqlQuery>){
-        containerQueries.add(QueryContainerContents(containerName, queries.map { getMetadata(it) }))
+    fun processQueryContainer(containerName : String, queries : List<Pair<SqlQuery, Element>>){
+        containerQueries.add(QueryContainerContents(
+            containerName,
+            queries.mapNotNull { (annotation, element) -> getMetadata(annotation, element) }
+        ))
     }
 
-    private fun getMetadata(query : SqlQuery) : SqlQueryData {
-        val name = query.name
-        val statement = query.query
-        val outputClassName = query.resultName
+    private fun getMetadata(query : SqlQuery, element : Element) : SqlQueryData? {
+        try {
+            val name = query.name
+            val statement = query.query
+            val outputClassName = query.resultName
 
-        val (replacedQuery, mapping) = replaceNamedParameters(statement)
+            val (replacedQuery, mapping) = replaceNamedParameters(statement)
 
-        val prep = connection.prepareStatement(replacedQuery)
-        val metaData : ResultSetMetaData? = prep.metaData
-        val parameterMetaData = prep.parameterMetaData!!
+            val prep = connection.prepareStatement(replacedQuery)
+            val metaData: ResultSetMetaData? = prep.metaData
+            val parameterMetaData = prep.parameterMetaData!!
 
-        val inputs = (1..parameterMetaData.parameterCount).map {
-            var paramName = mapping[it]!!
-            val nullable : Boolean
-            if(paramName.endsWith("?")){
-                paramName = paramName.dropLast(1)
-                nullable = true
-            } else {
-                nullable = false
-            }
-            InputParameter(
-                type = getTypeRepr(parameterMetaData.getParameterTypeName(it), nullable),
-                sqlTypeName = parameterMetaData.getParameterTypeName(it),
-                sqlTypeCode = parameterMetaData.getParameterType(it),
-                parameterName = paramName
-            )
-        }
-        val outputs = if (metaData != null) {
-            (1..metaData.columnCount).map {
-                OutputColumn(
-                    columnName = metaData.getColumnName(it),
-                    type = getTypeRepr(metaData.getColumnTypeName(it), metaData.isNullable(it) == ResultSetMetaData.columnNullable)
+            val inputs = (1..parameterMetaData.parameterCount).map {
+                var paramName = mapping[it]!!
+                val nullable: Boolean
+                if (paramName.endsWith("?")) {
+                    paramName = paramName.dropLast(1)
+                    nullable = true
+                } else {
+                    nullable = false
+                }
+                InputParameter(
+                    type = getTypeRepr(parameterMetaData.getParameterTypeName(it), nullable),
+                    sqlTypeName = parameterMetaData.getParameterTypeName(it),
+                    sqlTypeCode = parameterMetaData.getParameterType(it),
+                    parameterName = paramName
                 )
             }
-        } else {
-            listOf()
+            val outputs = if (metaData != null) {
+                (1..metaData.columnCount).map {
+                    OutputColumn(
+                        columnName = metaData.getColumnName(it),
+                        type = getTypeRepr(
+                            metaData.getColumnTypeName(it),
+                            metaData.isNullable(it) == ResultSetMetaData.columnNullable
+                        )
+                    )
+                }
+            } else {
+                listOf()
+            }
+
+            val className = when {
+                outputClassName.contains('.') -> ClassName.bestGuess(outputClassName)
+                outputClassName.isNotBlank() -> ClassName(generatedPackageName, outputClassName)
+                else -> null
+            }
+
+            val finalQuery = castEnumParameters(statement, inputs)
+
+            return SqlQueryData(name, finalQuery, inputs, outputs, className, element)
+        } catch(t : Throwable){
+            messager.printMessage(Diagnostic.Kind.ERROR, "Could not process query \"${query.name}\": $t", element)
+            return null
         }
-
-        val className  = when {
-            outputClassName.contains('.') -> ClassName.bestGuess(outputClassName)
-            outputClassName.isNotBlank() -> ClassName(generatedPackageName, outputClassName)
-            else -> null
-        }
-
-        val finalQuery = castEnumParameters(statement, inputs)
-
-        return SqlQueryData(name, finalQuery, inputs, outputs, className)
     }
 
 
@@ -261,7 +279,14 @@ internal class SqlQueryWrapperGenerator(
     }
 }
 
-private data class SqlQueryData(val name : String, val query : String, val inputs : List<InputParameter>, val outputs : List<OutputColumn>, val outputClassName : ClassName?)
+private data class SqlQueryData(
+    val name : String,
+    val query : String,
+    val inputs : List<InputParameter>,
+    val outputs : List<OutputColumn>,
+    val outputClassName : ClassName?,
+    val element : Element
+)
 private data class InputParameter(val type : TypeName, val sqlTypeName : String, val sqlTypeCode : Int, val parameterName : String)
 private data class OutputColumn(val columnName : String, val type : TypeName)
 

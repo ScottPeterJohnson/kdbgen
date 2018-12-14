@@ -2,6 +2,7 @@ package net.justmachinery.kdbgen.kapt
 
 import org.intellij.lang.annotations.Language
 
+@Retention(AnnotationRetention.SOURCE)
 annotation class SqlGenerationSettings(
     /**
      * URL of database to connect to (including user/pass)
