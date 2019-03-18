@@ -1,8 +1,8 @@
+
 import com.jfrog.bintray.gradle.BintrayExtension
-import org.jetbrains.kotlin.gradle.plugin.KotlinSourceSet
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
-import java.util.Date
 import java.net.URI
+import java.util.*
 
 plugins {
 	`java-gradle-plugin`
@@ -14,7 +14,7 @@ plugins {
 }
 
 allprojects {
-	version = "0.8.3"
+	version = "0.8.4"
 	group = "net.justmachinery.kdbgen"
 
 

@@ -269,7 +269,7 @@ internal class SqlQueryWrapperGenerator(
     }
     private fun overNamedParameters(query : String, replacement : (String)->String) : String {
         val matcher = Pattern.compile("(?<!:):(\\w+\\??)").matcher(query)
-        val transformed = StringBuilder()
+        val transformed = StringBuffer()
         while (matcher.find()) {
             val parameterName = matcher.group(1)
             matcher.appendReplacement(transformed, replacement(parameterName))
