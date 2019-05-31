@@ -8,13 +8,13 @@ plugins {
 	`java-gradle-plugin`
 	maven
 	`maven-publish`
-	kotlin("jvm").version("1.3.10")
+	kotlin("jvm").version("1.3.31")
 	id("com.jfrog.bintray").version("1.8.4")
-	id("org.jetbrains.kotlin.kapt").version("1.3.10")
+	id("org.jetbrains.kotlin.kapt").version("1.3.31")
 }
 
 allprojects {
-	version = "0.8.4"
+	version = "0.8.5"
 	group = "net.justmachinery.kdbgen"
 
 

@@ -132,7 +132,7 @@ internal class SqlQueryWrapperGenerator(
                 function.addStatement("val results = mutableListOf<$result>()")
                 function.beginControlFlow("while(rs.next())")
                 for((index, output) in query.outputs.withIndex()){
-                    function.addStatement("val out$index = convertFromResultSetObject(rs.getObject(${index+1}), ${resultWrapperClass.simpleName}::`${output.columnName}`.returnType) as %T", output.type)
+                    function.addStatement("val out$index = convertFromResultSetObject(rs.getObject(\"${output.columnName}\"), ${resultWrapperClass.simpleName}::`${output.columnName}`.returnType) as %T", output.type)
                 }
                 if(hasDirectResult) {
                     function.addStatement("results.add(out0)")
