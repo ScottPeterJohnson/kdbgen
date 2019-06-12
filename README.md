@@ -6,12 +6,13 @@
  
  The underlying philosophy is:
  - Databases understand their schemas already, so you shouldn't have to write more code describing your tables 
- - Queries should be known safe at compile time.
+ - Queries should be known safe at compile time. (We can currently only mostly achieve this; significant holes
+ include nullability on outputs, which Postgres does not return good metadata for.)
  - SQL is a fine language for writing SQL.
  
  Warning: Contains annotation processors that rely on having a local Postgres 
  database with your schema in it to compile. It is this library's opinion that
- this is natural and laudable and not a big deal, but this may be a controversial stance.
+ this is natural and laudable and not a big deal, but this may not work for you.
   
 ## Use
 ### Install
@@ -95,6 +96,12 @@ class QueryObject : QueryObjectQueries {
         sql {
             queryImpl()
         }
+    }
+    //Also supported: multiple result sets in a query.
+    @SqlQuery("multiResultSetImpl", "SELECT name FROM user; SELECT name FROM street", "TwoResultSets")
+    fun doQuery() {
+        val result : TwoResultSets = sql { multiResultSetImpl() }
+        val (users, streets) = result
     }
 }
 

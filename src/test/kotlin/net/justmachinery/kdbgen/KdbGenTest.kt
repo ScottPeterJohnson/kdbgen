@@ -7,9 +7,8 @@ import net.justmachinery.kdbgen.kapt.QueryContainer
 import net.justmachinery.kdbgen.kapt.SqlQuery
 import net.justmachinery.kdbgen.sql.AnnotationQueriesTestQueries
 import net.justmachinery.kdbgen.sql.EnumTypeTest
-
-
-data class CustomClass(val user_name : String)
+import net.justmachinery.kdbgen.testcustom.CustomClass
+import net.justmachinery.kdbgen.testcustom.CustomResultSet
 
 
 @QueryContainer
@@ -36,8 +35,8 @@ class AnnotationQueriesTest : DatabaseTest(), AnnotationQueriesTestQueries {
 		"UserResult"
 	)
 	@SqlQuery("customClassSelect",
-		"""SELECT user_name FROM users""",
-		"net.justmachinery.kdbgen.CustomClass"
+		"""SELECT user_name FROM users """,
+		"net.justmachinery.kdbgen.testcustom.CustomClass"
 	)
 	@SqlQuery("foobaz",
 		"SELECT 1 + :addendum AS foobar"
@@ -53,7 +52,7 @@ class AnnotationQueriesTest : DatabaseTest(), AnnotationQueriesTestQueries {
 				selectAllUsers().first().user_name shouldBe "foobar"
 				nullableSelect(null)
 				namedSelect("foobar") shouldBe otherNamedSelect()
-				customClassSelect().first().user_name
+				customClassSelect().first() shouldBe CustomClass("foobar")
 				deleteUser("foobar")
 				selectAllUsers() should beEmpty()
 				foobaz(3)
@@ -73,8 +72,24 @@ class AnnotationQueriesTest : DatabaseTest(), AnnotationQueriesTestQueries {
 		}
 	}
 
+	@SqlQuery("multiResultSets", "SELECT * FROM enum_test; SELECT * FROM users")
+	@SqlQuery("namedMultiResultSets", "SELECT * FROM enum_test; SELECT * FROM users", "NamedMultiResultSet")
+	@SqlQuery("customResultSets", "SELECT * FROM unnest('{1,2}'::bigint[]); SELECT user_name FROM users", "net.justmachinery.kdbgen.testcustom.CustomResultSet")
+	fun multipleResultSets(){
+        "multi result sets should work"{
+            sql {
+                enumTestInsert(EnumTypeTest.test2)
+                insertUser("foobar")
+                multiResultSets()
+                namedMultiResultSets()
+                customResultSets() shouldBe CustomResultSet(listOf(1,2), listOf("foobar"))
+            }
+        }
+	}
+
 	init {
 		test()
 		enums()
+        multipleResultSets()
 	}
 }
