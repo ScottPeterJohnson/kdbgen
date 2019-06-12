@@ -255,33 +255,37 @@ internal class GenerateCode(private val generator : SqlQueryWrapperGenerator) {
                     if(index > 0){
                         function.addStatement("prepared.moreResults")
                     }
-                    function.addStatement("while(prepared.resultSet == null){ if(!prepared.moreResults && prepared.updateCount == -1){ throw IllegalStateException(\"Invalid returned result set structure\") }}")
 
-                    val returns = resultSetOutputs.getValue(resultSet)
-                    if(returns is ResultSetOutput.None){ continue }
-
-                    function.addStatement("val rs$index = prepared.resultSet")
-
-
-                    function.addStatement("val results$index = mutableListOf<${returns.extractName()}>()")
-                    resultSubs.add("results$index")
-                    function.beginControlFlow("while(rs$index.next())")
-
-                    for((columnIndex, column) in resultSet.columns.withIndex()){
-                        function.addStatement("val out$columnIndex = convertFromResultSetObject(rs$index.getObject(\"${column.columnName}\"), ${returns.extractWrapper()}::`${column.columnName}`.returnType) as %T", column.type)
-                    }
-
-                    if(returns is ResultSetOutput.DirectType){
-                        function.addStatement("results$index.add(out0)")
-                    } else {
-                        function.addStatement("results$index.add(${returns.extractName()}(${resultSet.columns.withIndex().joinToString(", ") { (index, it) -> "`${it.columnName}` = out$index" }}))")
-                    }
-
+                    function.addStatement("var rs$index = prepared.resultSet")
+                    function.beginControlFlow("while(rs$index == null)")
+                        function.beginControlFlow("if(!prepared.moreResults && prepared.updateCount == -1)")
+                            function.addStatement("throw IllegalStateException(\"Invalid returned result set structure\")")
+                        function.endControlFlow()
+                        function.addStatement("rs$index = prepared.resultSet")
                     function.endControlFlow()
 
-                    if(!isMultiOuterResult){
-                        function.addStatement("return results$index")
-                    }
+                        val returns = resultSetOutputs.getValue(resultSet)
+                        if(returns !is ResultSetOutput.None){
+                            function.addStatement("val results$index = mutableListOf<${returns.extractName()}>()")
+                            resultSubs.add("results$index")
+                            function.beginControlFlow("while(rs$index.next())")
+
+                            for((columnIndex, column) in resultSet.columns.withIndex()){
+                                function.addStatement("val out$columnIndex = convertFromResultSetObject(rs$index.getObject(\"${column.columnName}\"), ${returns.extractWrapper()}::`${column.columnName}`.returnType) as %T", column.type)
+                            }
+
+                            if(returns is ResultSetOutput.DirectType){
+                                function.addStatement("results$index.add(out0)")
+                            } else {
+                                function.addStatement("results$index.add(${returns.extractName()}(${resultSet.columns.withIndex().joinToString(", ") { (index, it) -> "`${it.columnName}` = out$index" }}))")
+                            }
+
+                            function.endControlFlow()
+
+                            if(!isMultiOuterResult){
+                                function.addStatement("return results$index")
+                            }
+                        }
                 }
                 if(isMultiOuterResult){
                     function.addStatement("return $multiResultName(${resultSubs.joinToString(",")})")
