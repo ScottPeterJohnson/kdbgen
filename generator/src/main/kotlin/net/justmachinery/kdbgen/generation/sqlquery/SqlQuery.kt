@@ -86,9 +86,8 @@ internal class SqlQueryWrapperGenerator(
 
             val prep = connection.prepareStatement(replacedQuery)
             prep.use {
-                prep.unwrap(PgStatement::class.java).executeWithFlags(QueryExecutor.QUERY_ONESHOT or QueryExecutor.QUERY_DESCRIBE_ONLY or QueryExecutor.QUERY_SUPPRESS_BEGIN)
-
                 val parameterMetaData = prep.parameterMetaData!!
+
 
                 val inputs = (1..parameterMetaData.parameterCount).map {
                     var paramName = mapping.getValue(it)
@@ -107,6 +106,9 @@ internal class SqlQueryWrapperGenerator(
                     )
                 }
 
+                prep.unwrap(PgStatement::class.java).executeWithFlags(QueryExecutor.QUERY_ONESHOT or QueryExecutor.QUERY_DESCRIBE_ONLY or QueryExecutor.QUERY_SUPPRESS_BEGIN)
+
+
 
                 fun String.toClassName() : ClassName? {
                     return when {
@@ -117,10 +119,17 @@ internal class SqlQueryWrapperGenerator(
                 }
                 val className = outputClassName.toClassName()
 
-                val subStatements = mutableListOf<ResultSetData>()
+                val resultSets = mutableListOf<ResultSetData>()
+                //Note that for weird Postgres reasons, we cannot get updateCounts with a
+                //describe-only query. These will have to be skipped at query execution time.
                 while(true){
-                    val metaData: ResultSetMetaData? = prep.metaData
-                    if(metaData != null){
+                    if (prep.updateCount != -1 || prep.resultSet == null) {
+                        resultSets.add(ResultSetData(
+                            columns = emptyList(),
+                            innerResultName = null
+                        ))
+                    } else {
+                        val metaData: ResultSetMetaData = prep.metaData
                         val outputs = ((1..metaData.columnCount).map {
                             OutputColumn(
                                 columnName = metaData.getColumnName(it),
@@ -130,13 +139,17 @@ internal class SqlQueryWrapperGenerator(
                                 )
                             )
                         })
-                        subStatements.add(ResultSetData(
+                        resultSets.add(ResultSetData(
                             columns = outputs,
-                            innerResultName = query.subResultNames.getOrNull(subStatements.size)?.let { if(it.isBlank()) null else it }?.let { it.toClassName() }
+                            innerResultName = query.subResultNames.getOrNull(resultSets.size)?.let { if(it.isBlank()) null else it }?.let { it.toClassName() }
                         ))
                     }
 
-                    if(!prep.moreResults && prep.updateCount == -1){ break }
+                    if(!prep.moreResults){
+                       if(prep.updateCount == -1){
+                           break
+                       }
+                    }
                 }
 
 
@@ -147,7 +160,7 @@ internal class SqlQueryWrapperGenerator(
                     name = name,
                     query = finalQuery,
                     inputs = inputs,
-                    resultSets = subStatements,
+                    resultSets = resultSets,
                     outerResultName = className,
                     element = element
                 )

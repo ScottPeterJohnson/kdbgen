@@ -75,6 +75,7 @@ class AnnotationQueriesTest : DatabaseTest(), AnnotationQueriesTestQueries {
 	@SqlQuery("multiResultSets", "SELECT * FROM enum_test; SELECT * FROM users")
 	@SqlQuery("namedMultiResultSets", "SELECT * FROM enum_test; SELECT * FROM users", "NamedMultiResultSet")
 	@SqlQuery("customResultSets", "SELECT * FROM unnest('{1,2}'::bigint[]); SELECT user_name FROM users", "net.justmachinery.kdbgen.testcustom.CustomResultSet")
+	@SqlQuery("nonResultSets", "SELECT * FROM enum_test; UPDATE enum_test SET enum_test_id = 0 WHERE false; DELETE FROM enum_test WHERE false; SELECT user_name FROM users   ")
 	fun multipleResultSets(){
         "multi result sets should work"{
             sql {
@@ -83,6 +84,7 @@ class AnnotationQueriesTest : DatabaseTest(), AnnotationQueriesTestQueries {
                 multiResultSets()
                 namedMultiResultSets()
                 customResultSets() shouldBe CustomResultSet(listOf(1,2), listOf("foobar"))
+				nonResultSets()
             }
         }
 	}

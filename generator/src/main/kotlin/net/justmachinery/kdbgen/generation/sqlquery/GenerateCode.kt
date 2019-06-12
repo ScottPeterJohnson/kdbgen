@@ -177,14 +177,14 @@ internal class GenerateCode(private val generator : SqlQueryWrapperGenerator) {
             })
         }
 
-        private fun generateMultiResultWrapper(outputs : Map<ResultSetData, ResultSetOutput>) {
+        private fun generateMultiResultWrapper(resultSetOutputs : Map<ResultSetData, ResultSetOutput>) {
             if(isMultiOuterResult && !outerUseExistingType){
                 val resultClassBuilder = TypeSpec.classBuilder(multiOuterWrapperName)
                     .addModifiers(KModifier.DATA)
 
                 val primaryConstructor = FunSpec.constructorBuilder()
-                for ((index, statement) in query.resultSets.withIndex()) {
-                    val result = outputs.getValue(statement)
+                for ((index, resultSet) in query.resultSets.withIndex()) {
+                    val result = resultSetOutputs.getValue(resultSet)
                     if(result !is ResultSetOutput.None){
                         val resultSetRows = List::class.asClassName().parameterizedBy(result.extractName())
                         val name = "resultSet${index+1}"
@@ -208,7 +208,7 @@ internal class GenerateCode(private val generator : SqlQueryWrapperGenerator) {
             }
         }
 
-        private fun generateFunction(outputs : Map<ResultSetData, ResultSetOutput>) {
+        private fun generateFunction(resultSetOutputs : Map<ResultSetData, ResultSetOutput>) {
             val function = FunSpec.builder(query.name)
             function.receiver(ConnectionProvider::class)
 
@@ -237,41 +237,44 @@ internal class GenerateCode(private val generator : SqlQueryWrapperGenerator) {
 
             function.addStatement("prepared.execute()")
 
-            if(outputs.values.any { it !is ResultSetOutput.None }){
+            if(resultSetOutputs.values.any { it !is ResultSetOutput.None }){
                 val multiResultName = when {
                     outerUseExistingType -> query.outerResultName!!
                     else -> multiOuterWrapperName
                 }
                 when {
-                    outputs.size == 1 -> {
-                        val singleResultSet = outputs.values.single().extractName()
+                    resultSetOutputs.size == 1 -> {
+                        val singleResultSet = resultSetOutputs.values.single().extractName()
                         function.returns(List::class.asClassName().parameterizedBy(singleResultSet))
                     }
                     else -> function.returns(multiResultName)
                 }
 
                 val resultSubs = mutableListOf<String>()
-                for((index, output) in query.resultSets.withIndex()){
+                for((index, resultSet) in query.resultSets.withIndex()){
                     if(index > 0){
                         function.addStatement("prepared.moreResults")
                     }
+                    function.addStatement("while(prepared.resultSet == null){ if(!prepared.moreResults && prepared.updateCount == -1){ throw IllegalStateException(\"Invalid returned result set structure\") }}")
+
+                    val returns = resultSetOutputs.getValue(resultSet)
+                    if(returns is ResultSetOutput.None){ continue }
+
                     function.addStatement("val rs$index = prepared.resultSet")
 
-                    val returns = outputs.getValue(output)
-                    if(returns is ResultSetOutput.None){ continue }
 
                     function.addStatement("val results$index = mutableListOf<${returns.extractName()}>()")
                     resultSubs.add("results$index")
                     function.beginControlFlow("while(rs$index.next())")
 
-                    for((columnIndex, column) in output.columns.withIndex()){
+                    for((columnIndex, column) in resultSet.columns.withIndex()){
                         function.addStatement("val out$columnIndex = convertFromResultSetObject(rs$index.getObject(\"${column.columnName}\"), ${returns.extractWrapper()}::`${column.columnName}`.returnType) as %T", column.type)
                     }
 
                     if(returns is ResultSetOutput.DirectType){
                         function.addStatement("results$index.add(out0)")
                     } else {
-                        function.addStatement("results$index.add(${returns.extractName()}(${output.columns.withIndex().joinToString(", ") { (index, it) -> "`${it.columnName}` = out$index" }}))")
+                        function.addStatement("results$index.add(${returns.extractName()}(${resultSet.columns.withIndex().joinToString(", ") { (index, it) -> "`${it.columnName}` = out$index" }}))")
                     }
 
                     function.endControlFlow()
