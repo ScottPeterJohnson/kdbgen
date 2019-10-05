@@ -19,6 +19,9 @@ abstract class DatabaseTest : AbstractSpec(), IntelliMarker {
 	val connection = DriverManager.getConnection(TEST_DATABASE_URL, Properties()) as PgConnection
 	init {
 		connection.autoCommit = false
+        connection.createStatement().use {
+            it.execute(ClassLoader.getSystemClassLoader().getResource("prelude.sql")!!.readText())
+        }
 	}
 	val connectionProvider = object : ConnectionProvider {
 		override fun getConnection(): Connection {

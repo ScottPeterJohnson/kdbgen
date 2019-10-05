@@ -42,7 +42,7 @@ internal class GenerateCode(private val generator : SqlQueryWrapperGenerator) {
             StandardLocation.SOURCE_OUTPUT,
             generatedPackageName,
             "Queries.kt",
-            *(generator.context.elements.let { it.queries + it.settings }.toTypedArray())
+            *(generator.context.elements.all.toTypedArray())
         ).openWriter().use {
             fileBuilder.build().writeTo(it)
         }*/

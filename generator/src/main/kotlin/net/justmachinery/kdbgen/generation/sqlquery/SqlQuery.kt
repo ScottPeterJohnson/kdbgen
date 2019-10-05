@@ -22,7 +22,8 @@ import javax.tools.Diagnostic
 internal const val generatedPackageName = "net.justmachinery.kdbgen.sql"
 
 internal class SqlQueryWrapperGenerator(
-    val context : AnnotationContext
+    val context : AnnotationContext,
+    val prelude : String
 ) : AutoCloseable {
     private val connection : Connection
     val enumTypes : List<EnumType>
@@ -34,8 +35,18 @@ internal class SqlQueryWrapperGenerator(
             Properties()
         ) as PgConnection
 
+        initializePrelude()
+
         enumTypes = generateEnumTypes(connection)
         renderingContext = RenderingContext(context.settings, enumTypes)
+    }
+
+    private fun initializePrelude(){
+        if(prelude.isNotBlank()){
+            connection.createStatement().use {
+                it.execute(prelude)
+            }
+        }
     }
 
     private fun convertTypeRepr(repr : RenderingContext.TypeRepr) : TypeName {

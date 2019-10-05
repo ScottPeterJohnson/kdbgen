@@ -16,6 +16,7 @@ internal data class Settings(
 	val outputDirectory : String
 )
 
+
 internal class RenderingContext(
 	val settings: Settings,
 	enums: List<EnumType>) {

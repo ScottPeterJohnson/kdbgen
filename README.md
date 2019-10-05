@@ -124,6 +124,20 @@ You can either use a simple name (`Foo`) and generate the wrapper class automati
 or fully qualify the name (`com.mycompany.Foo`) to use an existing class. Said class should
 have a constructor that accepts exactly the named parameters of the query.
 
+#### Using temporary views
+Views are an excellent way to simplify complex SQL code and reduce code reuse. Temporary views are those which
+are created per-connection and not persisted in the database. kdbgen offers support by the `@SqlPrelude` annotation.
+All `@SqlPrelude` annotations are collected together and run once before evaluating any queries; you can thus
+reference temporary views created within them in your queries. A "prelude.sql" file is generated- be sure to
+initialize your database connections at runtime by running its contents.
+
+In Intellij, you can add the "prelude.sql" file as a data source to correctly resolve view references in query text.
+
+If your views logically depend on each other, you can specify class dependencies within the annotation to control their output ordering.
+
+BE CAREFUL to use "create temporary view" and not "create view". Otherwise, compiling will actually create the views
+in the database. (This apparently can't be worked around with read-only connections.)
+
 ## TODO
 - Transforming parameters/results could be optimized further
 - This approach could probably work with arbitrary SQL providers, not just Postgres. 

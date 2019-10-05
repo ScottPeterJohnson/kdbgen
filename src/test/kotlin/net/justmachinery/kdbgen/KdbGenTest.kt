@@ -4,13 +4,14 @@ import io.kotlintest.matchers.beEmpty
 import io.kotlintest.should
 import io.kotlintest.shouldBe
 import net.justmachinery.kdbgen.kapt.QueryContainer
+import net.justmachinery.kdbgen.kapt.SqlPrelude
 import net.justmachinery.kdbgen.kapt.SqlQuery
 import net.justmachinery.kdbgen.sql.AnnotationQueriesTestQueries
 import net.justmachinery.kdbgen.sql.EnumTypeTest
 import net.justmachinery.kdbgen.testcustom.CustomClass
 import net.justmachinery.kdbgen.testcustom.CustomResultSet
 
-
+@SqlPrelude("create temporary view prelude_test as select 1")
 @QueryContainer
 class AnnotationQueriesTest : DatabaseTest(), AnnotationQueriesTestQueries {
 	@SqlQuery("addition",
@@ -44,6 +45,9 @@ class AnnotationQueriesTest : DatabaseTest(), AnnotationQueriesTestQueries {
 	@SqlQuery("casting",
 		"SELECT '1' || 3::text AS foobar"
 	)
+    @SqlQuery("prelude",
+        "select * from prelude_test"
+    )
 	fun test(){
 		"should be able to do basic operations" {
 			sql {
@@ -95,3 +99,19 @@ class AnnotationQueriesTest : DatabaseTest(), AnnotationQueriesTestQueries {
         multipleResultSets()
 	}
 }
+
+@SqlPrelude("""
+    create temporary view prelude_test_1 as select 1
+""")
+class PreludeTest1
+@SqlPrelude("""
+    create temporary view prelude_test_2 as select * from prelude_test_3
+""", dependencies = [ PreludeTest3::class ])
+@SqlPrelude("""
+    create temporary view prelude_test_2_b as select true
+""")
+class PreludeTest2
+@SqlPrelude("""
+    create temporary view prelude_test_3 as select * from prelude_test_1
+""", dependencies = [ PreludeTest1::class ])
+class PreludeTest3

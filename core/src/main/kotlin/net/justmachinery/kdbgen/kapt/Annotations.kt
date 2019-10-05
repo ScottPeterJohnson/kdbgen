@@ -1,6 +1,7 @@
 package net.justmachinery.kdbgen.kapt
 
 import org.intellij.lang.annotations.Language
+import kotlin.reflect.KClass
 
 @Retention(AnnotationRetention.SOURCE)
 annotation class SqlGenerationSettings(
@@ -12,7 +13,8 @@ annotation class SqlGenerationSettings(
      * Directory to output generated source files to
      * Defaults to kapt
      */
-    val outputDirectory : String = ""
+    val outputDirectory : String = "",
+    val preludeOutputDirectory : String = ""
 )
 
 @Suppress("DEPRECATED_JAVA_ANNOTATION")
@@ -75,3 +77,46 @@ annotation class SqlQueries(vararg val value : SqlQuery)
 )
 @Retention(AnnotationRetention.SOURCE)
 annotation class QueryContainer
+
+/**
+ * Allows you to specify code that that runs when a connection is created, and hence exists before every processed query.
+ * You can use this to e.g. define temporary views that can then be referenced from other queries.
+ */
+@Suppress("DEPRECATED_JAVA_ANNOTATION")
+@Target(
+    AnnotationTarget.CLASS,
+    AnnotationTarget.TYPE,
+    AnnotationTarget.PROPERTY,
+    AnnotationTarget.FUNCTION,
+    AnnotationTarget.CONSTRUCTOR,
+    AnnotationTarget.FIELD,
+    AnnotationTarget.PROPERTY_GETTER,
+    AnnotationTarget.PROPERTY_SETTER
+)
+@Repeatable
+@java.lang.annotation.Repeatable(SqlPreludes::class)
+@Retention(AnnotationRetention.SOURCE)
+annotation class SqlPrelude(
+    /**
+     * SQL to execute
+     */
+    @Language("PostgreSQL")
+    val sql : String,
+    /**
+     * Allows you to control the ordering of combined sql by specifying other classes annotated with [SqlTempView] to be added first.
+     */
+    vararg val dependencies : KClass<out Any> = []
+)
+
+@Retention(AnnotationRetention.SOURCE)
+@Target(
+    AnnotationTarget.CLASS,
+    AnnotationTarget.TYPE,
+    AnnotationTarget.PROPERTY,
+    AnnotationTarget.FUNCTION,
+    AnnotationTarget.CONSTRUCTOR,
+    AnnotationTarget.FIELD,
+    AnnotationTarget.PROPERTY_GETTER,
+    AnnotationTarget.PROPERTY_SETTER
+)
+annotation class SqlPreludes(vararg val value : SqlPrelude)
