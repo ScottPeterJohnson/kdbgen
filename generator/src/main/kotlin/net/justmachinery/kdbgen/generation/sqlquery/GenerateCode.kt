@@ -34,7 +34,18 @@ internal class GenerateCode(private val generator : SqlQueryWrapperGenerator) {
             fileBuilder.addType(queryContainerInterface.build())
         }
 
-        fileBuilder.build().writeTo(File(generator.settings.outputDirectory))
+
+        fileBuilder.build().writeTo(File(generator.context.settings.outputDirectory))
+        //TODO: Unclear whether there's a way to use the Filer API and also generate Kotlin source files.
+        //This precludes incremental annotation processing.
+        /*generator.context.processingEnv.filer.createResource(
+            StandardLocation.SOURCE_OUTPUT,
+            generatedPackageName,
+            "Queries.kt",
+            *(generator.context.elements.let { it.queries + it.settings }.toTypedArray())
+        ).openWriter().use {
+            fileBuilder.build().writeTo(it)
+        }*/
     }
 
     internal sealed class ResultSetOutput {
@@ -88,7 +99,7 @@ internal class GenerateCode(private val generator : SqlQueryWrapperGenerator) {
                 generateMultiResultWrapper(resultClasses)
                 generateFunction(resultClasses)
             } catch(g : GeneratingException){
-                generator.messager.printMessage(
+                generator.context.processingEnv.messager.printMessage(
                     Diagnostic.Kind.ERROR,
                     g.msg,
                     g.element

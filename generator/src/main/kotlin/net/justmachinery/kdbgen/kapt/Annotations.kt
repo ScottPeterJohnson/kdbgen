@@ -1,6 +1,5 @@
 package net.justmachinery.kdbgen.kapt
 
-import com.google.auto.service.AutoService
 import net.justmachinery.kdbgen.generation.Settings
 import net.justmachinery.kdbgen.generation.sqlquery.SqlQueryWrapperGenerator
 import javax.annotation.processing.*
@@ -11,22 +10,31 @@ import javax.tools.Diagnostic
 
 const val KAPT_KOTLIN_GENERATED_OPTION_NAME = "kapt.kotlin.generated"
 
-@AutoService(Processor::class)
-@SupportedSourceVersion(SourceVersion.RELEASE_8)
-@SupportedAnnotationTypes("net.justmachinery.kdbgen.kapt.SqlQuery", "net.justmachinery.kdbgen.kapt.SqlQueries")
+@SupportedSourceVersion(SourceVersion.RELEASE_11)
+@SupportedAnnotationTypes(
+    "net.justmachinery.kdbgen.kapt.SqlGenerationSettings",
+    "net.justmachinery.kdbgen.kapt.SqlQuery",
+    "net.justmachinery.kdbgen.kapt.SqlQueries"
+)
 @SupportedOptions(KAPT_KOTLIN_GENERATED_OPTION_NAME)
 class SqlQueryProcessor : AbstractProcessor() {
     override fun process(_1: MutableSet<out TypeElement>, roundEnv: RoundEnvironment): Boolean {
-        val annotatedElements = roundEnv.getElementsAnnotatedWith(SqlQuery::class.java).union(roundEnv.getElementsAnnotatedWith(SqlQueries::class.java))
-        if(annotatedElements.isNotEmpty()){
-            withGenerationSettings(roundEnv){ settings ->
+        val annotatedElements = AnnotatedElements(roundEnv)
+        processingEnv.filer
+        if(annotatedElements.queries.isNotEmpty()){
+            withGenerationSettings(annotatedElements){ settings ->
+                val context = AnnotationContext(
+                    processingEnv = processingEnv,
+                    settings = settings,
+                    elements = annotatedElements
+                )
                 try {
-                    SqlQueryWrapperGenerator(processingEnv.messager, settings)
+                    SqlQueryWrapperGenerator(context)
                 } catch(t : Throwable){
                     processingEnv.messager.printMessage(Diagnostic.Kind.ERROR, "Could not run kdbgen: $t")
                     null
                 }?.use { generator ->
-                    val elementsByContainer = annotatedElements.groupBy {
+                    val elementsByContainer = annotatedElements.queries.groupBy {
                         it.queryContainerParent()
                     }
                     for((container, elements) in elementsByContainer.entries){
@@ -62,8 +70,8 @@ class SqlQueryProcessor : AbstractProcessor() {
         return null
     }
 
-    private fun withGenerationSettings(roundEnv : RoundEnvironment, cb : (Settings)->Unit){
-        val annotations = roundEnv.getElementsAnnotatedWith(SqlGenerationSettings::class.java)
+    private fun withGenerationSettings(annotatedElements: AnnotatedElements, cb : (Settings)->Unit){
+        val annotations = annotatedElements.settings
         val kaptKotlinGeneratedDir = processingEnv.options[KAPT_KOTLIN_GENERATED_OPTION_NAME]
         when {
             annotations.size != 1 -> processingEnv.messager.printMessage(Diagnostic.Kind.ERROR, "Can't find @SqlGenerationSettings annotation")
@@ -79,5 +87,17 @@ class SqlQueryProcessor : AbstractProcessor() {
     }
 }
 
+internal class AnnotationContext(
+    val processingEnv: ProcessingEnvironment,
+    val settings: Settings,
+    val elements : AnnotatedElements
+)
+
+internal class AnnotatedElements(
+    roundEnv: RoundEnvironment
+){
+    val queries = roundEnv.getElementsAnnotatedWith(SqlQuery::class.java).union(roundEnv.getElementsAnnotatedWith(SqlQueries::class.java))
+    val settings by lazy { roundEnv.getElementsAnnotatedWith(SqlGenerationSettings::class.java) }
+}
 
 private fun String.nullIfEmpty() = if(this.isEmpty()) null else this

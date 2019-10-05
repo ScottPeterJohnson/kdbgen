@@ -8,13 +8,13 @@ plugins {
 	`java-gradle-plugin`
 	maven
 	`maven-publish`
-	kotlin("jvm").version("1.3.31")
+	kotlin("jvm").version("1.3.50")
 	id("com.jfrog.bintray").version("1.8.4")
-	id("org.jetbrains.kotlin.kapt").version("1.3.31")
+	id("org.jetbrains.kotlin.kapt").version("1.3.50")
 }
 
 allprojects {
-	version = "0.8.8"
+	version = "0.8.9"
 	group = "net.justmachinery.kdbgen"
 
 
@@ -23,6 +23,7 @@ allprojects {
 		jcenter()
 		maven { url = URI("https://dl.bintray.com/scottpjohnson/generic/") }
 	}
+
 }
 subprojects {
 	apply(plugin = "org.gradle.java-gradle-plugin")
@@ -33,6 +34,10 @@ subprojects {
 	apply(plugin = "org.jetbrains.kotlin.kapt")
 
 
+    tasks.register<Jar>("sourcesJar") {
+        classifier = "sources"
+        from(sourceSets["main"].allSource)
+    }
 
 	publishing {
 		(publications) {
@@ -67,23 +72,19 @@ subprojects {
 		this.setProperty("publications", arrayOf("kdbgen-$name"))
 	}
 
-	tasks.register<Jar>("sourcesJar") {
-		classifier = "sources"
-		from(sourceSets["main"].allSource)
-	}
 }
 
 allprojects {
 	val compileKotlin : KotlinCompile by tasks
 	compileKotlin.kotlinOptions {
-		jvmTarget = JavaVersion.VERSION_1_8.toString()
+		jvmTarget = JavaVersion.VERSION_11.toString()
 	}
 	val compileTestKotlin : KotlinCompile by tasks
 	compileTestKotlin.kotlinOptions {
-		jvmTarget = JavaVersion.VERSION_1_8.toString()
+		jvmTarget = JavaVersion.VERSION_11.toString()
 	}
 	dependencies {
-		compile("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.3.10")
+        implementation(kotlin("stdlib-jdk8"))
 	}
 }
 

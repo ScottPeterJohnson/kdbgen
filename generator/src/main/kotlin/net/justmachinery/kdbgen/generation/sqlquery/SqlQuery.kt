@@ -4,8 +4,8 @@ import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import com.squareup.kotlinpoet.TypeName
 import net.justmachinery.kdbgen.generation.EnumType
 import net.justmachinery.kdbgen.generation.RenderingContext
-import net.justmachinery.kdbgen.generation.Settings
 import net.justmachinery.kdbgen.generation.generateEnumTypes
+import net.justmachinery.kdbgen.kapt.AnnotationContext
 import net.justmachinery.kdbgen.kapt.SqlQuery
 import org.postgresql.core.QueryExecutor
 import org.postgresql.jdbc.PgConnection
@@ -15,7 +15,6 @@ import java.sql.DriverManager
 import java.sql.ResultSetMetaData
 import java.util.*
 import java.util.regex.Pattern
-import javax.annotation.processing.Messager
 import javax.lang.model.element.Element
 import javax.tools.Diagnostic
 
@@ -23,8 +22,7 @@ import javax.tools.Diagnostic
 internal const val generatedPackageName = "net.justmachinery.kdbgen.sql"
 
 internal class SqlQueryWrapperGenerator(
-    val messager : Messager,
-    val settings : Settings
+    val context : AnnotationContext
 ) : AutoCloseable {
     private val connection : Connection
     val enumTypes : List<EnumType>
@@ -32,12 +30,12 @@ internal class SqlQueryWrapperGenerator(
     init {
         DriverManager.registerDriver(org.postgresql.Driver())
         connection = DriverManager.getConnection(
-            settings.databaseUrl,
+            context.settings.databaseUrl,
             Properties()
         ) as PgConnection
 
         enumTypes = generateEnumTypes(connection)
-        renderingContext = RenderingContext(settings, enumTypes)
+        renderingContext = RenderingContext(context.settings, enumTypes)
     }
 
     private fun convertTypeRepr(repr : RenderingContext.TypeRepr) : TypeName {
@@ -166,7 +164,7 @@ internal class SqlQueryWrapperGenerator(
                 )
             }
         } catch(t : Throwable){
-            messager.printMessage(Diagnostic.Kind.ERROR, "Could not process query \"${query.name}\": $t", element)
+            context.processingEnv.messager.printMessage(Diagnostic.Kind.ERROR, "Could not process query \"${query.name}\": $t", element)
             return null
         }
     }

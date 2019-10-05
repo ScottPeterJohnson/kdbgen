@@ -11,7 +11,7 @@ import java.util.*
 
 
 
-data class Settings(
+internal data class Settings(
 	val databaseUrl : String,
 	val outputDirectory : String
 )
