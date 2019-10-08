@@ -48,6 +48,9 @@ class AnnotationQueriesTest : DatabaseTest(), AnnotationQueriesTestQueries {
     @SqlQuery("prelude",
         "select * from prelude_test"
     )
+    @SqlQuery("nullableArray",
+        "select '{foo, bar, NULL}'::text[]"
+    )
 	fun test(){
 		"should be able to do basic operations" {
 			sql {
@@ -61,6 +64,7 @@ class AnnotationQueriesTest : DatabaseTest(), AnnotationQueriesTestQueries {
 				selectAllUsers() should beEmpty()
 				foobaz(3)
 				casting().first() shouldBe "13"
+                nullableArray().first().first() shouldBe "foo"
 			}
 		}
 	}

@@ -38,7 +38,7 @@ fun convertFromResultSetObject(value : Any?, type : KType) : Any?  {
 	val notNullType = type.withNullability(false)
 
 	if(value is PgArray){
-		assert(type.isSubtypeOf(List::class.starProjectedType))
+		assert(notNullType.isSubtypeOf(List::class.starProjectedType))
 		assert(type.arguments.size == 1)
 
 		val array = value.array as Array<*>
