@@ -11,31 +11,54 @@ import javax.tools.Diagnostic
 internal class GenerateCode(private val generator : SqlQueryWrapperGenerator) {
 
     val globallyOutputtedClasses = mutableSetOf<ClassName>()
-    val fileBuilder = FileSpec.builder(generatedPackageName, "Queries")
 
+    private val fileBuilders = mutableMapOf<String, FileSpec.Builder>()
+    private fun fileBuilderFor(name : String) = fileBuilders.getOrPut(name) {
+        FileSpec.builder(generatedPackageName, name).also {
+            it.addAnnotation(AnnotationSpec.builder(Suppress::class)
+                .also {
+                    listOf(
+                        "UNCHECKED_CAST",
+                        "RemoveRedundantBackticks",
+                        "RemoveRedundantQualifierName"
+                    ).forEach { an ->
+                        it.addMember(CodeBlock.of("\"$an\""))
+                    }
+                }
+                .useSiteTarget(AnnotationSpec.UseSiteTarget.FILE)
+                .build())
+            it.addImport("net.justmachinery.kdbgen.utility", "convertFromResultSetObject", "convertToParameterType")
+        }
+    }
 
     fun generateCode(){
-        fileBuilder.addImport("net.justmachinery.kdbgen.utility", "convertFromResultSetObject", "convertToParameterType")
-        renderEnumTypes(fileBuilder, generator.enumTypes)
+        if(generator.enumTypes.isNotEmpty()){
+            renderEnumTypes(fileBuilderFor("EnumTypes"), generator.enumTypes)
+        }
 
         for(query in generator.globalQueries){
-            GenerateQuery(null, null, query)
+            GenerateQuery(fileBuilderFor("GlobalQueries"), null, null, query)
         }
 
         for(container in generator.containerQueries){
             val queryContainerInterface = TypeSpec.interfaceBuilder(container.containerInterfaceName)
+            val builder = fileBuilderFor(container.containerInterfaceName)
             for(query in container.contents){
                 GenerateQuery(
+                    fileBuilder = builder,
                     container = queryContainerInterface,
                     containerName = container.containerInterfaceName,
                     query = query
                 )
             }
-            fileBuilder.addType(queryContainerInterface.build())
+            builder.addType(queryContainerInterface.build())
         }
 
-
-        fileBuilder.build().writeTo(File(generator.context.settings.outputDirectory))
+        val outputDirectory = File(generator.context.settings.outputDirectory)
+        outputDirectory.resolve(generatedPackageName.replace('.','/')).deleteRecursively()
+        fileBuilders.values.forEach { builder ->
+            builder.build().writeTo(outputDirectory)
+        }
         //TODO: Unclear whether there's a way to use the Filer API and also generate Kotlin source files.
         //This precludes incremental annotation processing.
         /*generator.context.processingEnv.filer.createResource(
@@ -73,6 +96,7 @@ internal class GenerateCode(private val generator : SqlQueryWrapperGenerator) {
     }
 
     internal inner class GenerateQuery(
+        val fileBuilder : FileSpec.Builder,
         val container : TypeSpec.Builder?,
         val containerName : String?,
         val query : SqlQueryData
