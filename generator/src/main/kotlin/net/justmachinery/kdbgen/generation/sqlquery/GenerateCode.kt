@@ -301,18 +301,18 @@ internal class GenerateCode(private val generator : SqlQueryWrapperGenerator) {
 
                         val returns = resultSetOutputs.getValue(resultSet)
                         if(returns !is ResultSetOutput.None){
-                            function.addStatement("val results$index = mutableListOf<${returns.extractName()}>()")
+                            function.addStatement("val results$index = mutableListOf<%T>()", returns.extractName())
                             resultSubs.add("results$index")
                             function.beginControlFlow("while(rs$index.next())")
 
                             for((columnIndex, column) in resultSet.columns.withIndex()){
-                                function.addStatement("val out$columnIndex = convertFromResultSetObject(rs$index.getObject(\"${column.columnName}\"), ${returns.extractWrapper()}::`${column.columnName}`.returnType) as %T", column.type)
+                                function.addStatement("val out$columnIndex = convertFromResultSetObject(rs$index.getObject(\"${column.columnName}\"), %T::`${column.columnName}`.returnType) as %T", returns.extractWrapper(), column.type)
                             }
 
                             if(returns is ResultSetOutput.DirectType){
                                 function.addStatement("results$index.add(out0)")
                             } else {
-                                function.addStatement("results$index.add(${returns.extractName()}(${resultSet.columns.withIndex().joinToString(", ") { (index, it) -> "`${it.columnName}` = out$index" }}))")
+                                function.addStatement("results$index.add(%T(${resultSet.columns.withIndex().joinToString(", ") { (index, it) -> "`${it.columnName}` = out$index" }}))", returns.extractName())
                             }
 
                             function.endControlFlow()
@@ -323,7 +323,7 @@ internal class GenerateCode(private val generator : SqlQueryWrapperGenerator) {
                         }
                 }
                 if(isMultiOuterResult){
-                    function.addStatement("return $multiResultName(${resultSubs.joinToString(",")})")
+                    function.addStatement("return %T(${resultSubs.joinToString(",")})", multiResultName)
                 }
             }
 

@@ -55,7 +55,7 @@ internal class SqlQueryWrapperGenerator(
                 if(repr.params.isNotEmpty()) it.parameterizedBy(*repr.params.map { param -> convertTypeRepr(param) }.toTypedArray()) else it
             }
             .let {
-                if(repr.nullable){ it.asNullable() } else { it.asNonNull() }
+                if(repr.nullable){ it.copy(nullable = true) } else { it.copy(nullable = false) }
             }
     }
 
