@@ -12,7 +12,6 @@ import net.justmachinery.kdbgen.kapt.SqlQuery
 import org.apache.commons.lang3.reflect.FieldUtils
 import java.sql.DriverManager
 import java.sql.ResultSetMetaData
-import java.sql.SQLType
 import java.sql.Types
 import java.util.*
 import java.util.regex.Pattern
@@ -22,7 +21,7 @@ import javax.tools.Diagnostic
 
 internal const val generatedPackageName = "net.justmachinery.kdbgen.sql"
 
-internal class SqlQueryWrapperGenerator(
+internal class KdbGenerator(
     val context : AnnotationContext,
     val prelude : String
 ) : AutoCloseable {
@@ -131,8 +130,12 @@ internal class SqlQueryWrapperGenerator(
                     OutputColumn(
                         columnName = metaData.getColumnName(it),
                         type = getTypeRepr(
-                            resultOids[it-1],
-                            metaData.isNullable(it) != ResultSetMetaData.columnNoNulls
+                            oid = resultOids[it-1],
+                            nullable = if(query.columnCanBeNull.isNotEmpty() && query.columnCanBeNull.size >= it){
+                                query.columnCanBeNull[it-1]
+                            } else {
+                                metaData.isNullable(it) != ResultSetMetaData.columnNoNulls
+                            }
                         )
                     )
                 })

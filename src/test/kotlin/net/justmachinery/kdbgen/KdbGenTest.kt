@@ -11,7 +11,7 @@ import net.justmachinery.kdbgen.sql.AnnotationQueriesTestQueries
 import net.justmachinery.kdbgen.sql.EnumTypeTest
 import net.justmachinery.kdbgen.sql.InventoryItem
 import net.justmachinery.kdbgen.testcustom.CustomClass
-import net.justmachinery.kdbgen.testcustom.CustomResultSet
+import java.util.*
 
 @SqlPrelude("create temporary view prelude_test as select 1")
 @QueryContainer
@@ -56,8 +56,9 @@ class AnnotationQueriesTest : DatabaseTest(), AnnotationQueriesTestQueries {
 	@SqlQuery("maxNullable",
 		"select max(address_id) from addresses"
 	)
-	@SqlQuery("xmlTest",
-		"select * from xml_test"
+	@SqlQuery("maxNonNullable",
+		"select coalesce(max(address_id), 0) from addresses",
+		columnCanBeNull = [false]
 	)
 	@SqlQuery("rangeInsert",
 		"insert into range_test (interval) values (:range)"
@@ -92,7 +93,13 @@ class AnnotationQueriesTest : DatabaseTest(), AnnotationQueriesTestQueries {
 				maxNullable().single() shouldBe null
 			}
 		}
-        "can we even do structs" {
+		"unnullable max() should be unnullable" {
+			sql {
+				val long : Long = maxNonNullable().single()
+				long shouldBe 0
+			}
+		}
+        "basic structs" {
             sql {
 				val item = InventoryItem("foo", 0, 3.5)
 				structInsert(item, 5)
@@ -103,15 +110,27 @@ class AnnotationQueriesTest : DatabaseTest(), AnnotationQueriesTestQueries {
 
             }
         }
-		"behold xml operations" {
-			sql {
-				xmlTest()
-			}
-		}
 		"ranges should parse" {
 			sql {
 				rangeInsert(Range.create(null, true, null, true))
 				rangeTest()
+			}
+		}
+	}
+
+
+	@SqlQuery("xmlTest",
+		"select * from xml_test"
+	)
+	@SqlQuery("xmlInsert",
+		"insert into xml_test (uuid, text) values (:uuid, :text)"
+	)
+	fun xml(){
+		"behold xml operations" {
+			sql {
+				val xml = "<foo>test</foo>"
+				xmlInsert(UUID.randomUUID(), connection.createSQLXML().apply { string = xml })
+				xmlTest().map { it.text.string }.single() shouldBe xml
 			}
 		}
 	}
@@ -146,6 +165,7 @@ class AnnotationQueriesTest : DatabaseTest(), AnnotationQueriesTestQueries {
 
 	init {
 		test()
+		xml()
 		enums()
         //multipleResultSets()
 	}

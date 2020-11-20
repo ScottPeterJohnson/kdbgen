@@ -2,7 +2,7 @@ package net.justmachinery.kdbgen.kapt
 
 import net.justmachinery.kdbgen.generation.PreludeGenerator
 import net.justmachinery.kdbgen.generation.Settings
-import net.justmachinery.kdbgen.generation.sqlquery.SqlQueryWrapperGenerator
+import net.justmachinery.kdbgen.generation.sqlquery.KdbGenerator
 import java.io.PrintWriter
 import java.io.StringWriter
 import javax.annotation.processing.*
@@ -36,7 +36,7 @@ class SqlQueryProcessor : AbstractProcessor() {
                 )
                 try {
                     val prelude = PreludeGenerator(context).generate()
-                    SqlQueryWrapperGenerator(context, prelude).use { generator ->
+                    KdbGenerator(context, prelude).use { generator ->
                         val elementsByContainer = annotatedElements.queries.groupBy {
                             it.queryContainerParent()
                         }

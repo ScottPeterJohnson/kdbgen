@@ -65,141 +65,142 @@ internal class TypeContext(val settings: Settings) {
         ) }
 
 
-        val prep = connection.prepareStatement("""
+        connection.prepareStatement("""
             select n.nspname = ANY(current_schemas(true)) as onpath, 
                 t.*, n.nspname
             from pg_catalog.pg_type t join pg_catalog.pg_namespace n on t.typnamespace = n.oid where t.oid = ?
-        """.trimIndent())
-        prep.setInt(1, oid)
+        """.trimIndent()).use { prep ->
+            prep.setInt(1, oid)
 
-        prep.executeQuery().use { rs ->
-            if(rs.next()){
-                val onPath = rs.getBoolean("onpath")
+            prep.executeQuery().use { rs ->
+                if(rs.next()){
+                    val onPath = rs.getBoolean("onpath")
 
-                val typeIsDefined = rs.getBoolean("typisdefined")
-                val schema = rs.getString("nspname")
+                    val typeIsDefined = rs.getBoolean("typisdefined")
+                    val schema = rs.getString("nspname")
 
-                val postgresName = run {
-                    val typeName = rs.getString("typname")
-                    val fullName = if(onPath) typeName else "\"$schema\".\"$typeName\""
-                    PostgresName(typeName, fullName)
-                }
-                if(typeIsDefined){
-                    val typeType = rs.getString("typtype")
-                    val typeArrayElem = rs.getInt("typelem")
-                    if(typeArrayElem != 0 && postgresName.unqualified.startsWith("_")){
-                        val arrayType = mapPostgresType(connection, typeArrayElem, null)
-                        return TypeRepr(
-                            base = List::class.asTypeName(),
-                            nullable = nullable ?: true,
-                            params = listOf(arrayType),
-                            oid = oid,
-                            sqlRepr = java.sql.Array::class.asClassName(),
-                            convertToSql = {
-                                "net.justmachinery.kdbgen.utility.convertToArray(${paramName}, \"${postgresName.unqualified}\", connection){ ${arrayType.convertToSql(ConvertToSqlContext("it")) } }"
-                            },
-                            convertFromSql = {
-                                "net.justmachinery.kdbgen.utility.convertFromArray(${resultName}){ ${arrayType.convertFromSql(ConvertFromSqlContext("it")) } }"
-                            }
-                        )
+                    val postgresName = run {
+                        val typeName = rs.getString("typname")
+                        val fullName = if(onPath) typeName else "\"$schema\".\"$typeName\""
+                        PostgresName(typeName, fullName)
                     }
-
-                    //See https://www.postgresql.org/docs/current/extend-type-system.html
-                    when(typeType){
-                        "b" -> {
-                            //Base type- JDBC should handle this
-                            val result = (connection.unwrap(PGDirectConnection::class.java)).getBaseClass(oid)
-                            if(result != null){
-                                return TypeRepr(
-                                    base = ClassName.bestGuess(kotlinEquivalent(result)),
-                                    sqlRepr = ClassName.bestGuess(result),
-                                    oid = oid,
-                                    nullable = nullable ?: true,
-                                    params = emptyList(),
-                                    isBase = true
-                                )
-                            }
-                            throw IllegalStateException("Unmapped base type $postgresName")
-                        }
-                        "c" -> {
-                            //Composite type
-                            val composite = composites.getOrPut(oid){
-                                val typeRelId = rs.getInt("typrelid")
-                                connection.constructCompositeType(postgresName, typeRelId)
-                            }
+                    if(typeIsDefined){
+                        val typeType = rs.getString("typtype")
+                        val typeArrayElem = rs.getInt("typelem")
+                        if(typeArrayElem != 0 && postgresName.unqualified.startsWith("_")){
+                            val arrayType = mapPostgresType(connection, typeArrayElem, null)
                             return TypeRepr(
-                                base = composite.className,
-                                oid = oid,
-                                sqlRepr = composite.className.nestedClass("SqlData"),
-                                convertFromSql = { "${resultName}.fromSQL()" },
-                                convertToSql = { "${paramName}.toSQL()" },
+                                base = List::class.asTypeName(),
                                 nullable = nullable ?: true,
-                                params = emptyList()
-                            )
-                        }
-                        "d" -> {
-                            //Domain type
-                            val typeNotNull = rs.getBoolean("typnotnull")
-                            val wraps = rs.getInt("typbasetype")
-                            val wrappedType = mapPostgresType(connection, wraps, !typeNotNull)
-                            val domain = domains.getOrPut(oid){
-                                DomainType(postgresName, wrappedType)
-                            }
-                            return TypeRepr(
-                                base = domain.className,
-                                nullable = nullable ?: true,
-                                params = emptyList(),
+                                params = listOf(arrayType),
                                 oid = oid,
-                                sqlRepr = wrappedType.sqlRepr,
-                                convertToSql = { wrappedType.convertToSql(ConvertToSqlContext("$paramName.raw")) },
+                                sqlRepr = java.sql.Array::class.asClassName(),
+                                convertToSql = {
+                                    "net.justmachinery.kdbgen.utility.convertToArray(${paramName}, \"${postgresName.unqualified}\", connection){ ${arrayType.convertToSql(ConvertToSqlContext("it")) } }"
+                                },
                                 convertFromSql = {
-                                    "${domain.className}(${
-                                        wrappedType.convertFromSql(
-                                            ConvertFromSqlContext(resultName)
-                                        )
-                                    })"
+                                    "net.justmachinery.kdbgen.utility.convertFromArray(${resultName}){ ${arrayType.convertFromSql(ConvertFromSqlContext("it")) } }"
                                 }
                             )
                         }
-                        "e" -> {
-                            //Enum type
-                            val enum = enums.getOrPut(oid){
-                                connection.constructEnumType(postgresName, oid)
+
+                        //See https://www.postgresql.org/docs/current/extend-type-system.html
+                        when(typeType){
+                            "b" -> {
+                                //Base type- JDBC should handle this
+                                val result = (connection.unwrap(PGDirectConnection::class.java)).getBaseClass(oid)
+                                if(result != null){
+                                    return TypeRepr(
+                                        base = ClassName.bestGuess(kotlinEquivalent(result)),
+                                        sqlRepr = ClassName.bestGuess(result),
+                                        oid = oid,
+                                        nullable = nullable ?: true,
+                                        params = emptyList(),
+                                        isBase = true
+                                    )
+                                }
+                                throw IllegalStateException("Unmapped base type $postgresName")
                             }
-                            return TypeRepr(
-                                base = enum.className,
-                                nullable = nullable ?: true,
-                                params = emptyList(),
-                                oid = oid,
-                                sqlRepr = String::class.asClassName(),
-                                convertToSql = { "$paramName.toString()" },
-                                convertFromSql = { "${enum.className}.valueOf($resultName as String)" },
-                                isEnum = true
-                            )
+                            "c" -> {
+                                //Composite type
+                                val composite = composites.getOrPut(oid){
+                                    val typeRelId = rs.getInt("typrelid")
+                                    connection.constructCompositeType(postgresName, typeRelId)
+                                }
+                                return TypeRepr(
+                                    base = composite.className,
+                                    oid = oid,
+                                    sqlRepr = composite.className.nestedClass("SqlData"),
+                                    convertFromSql = { "${resultName}.fromSQL()" },
+                                    convertToSql = { "${paramName}.toSQL()" },
+                                    nullable = nullable ?: true,
+                                    params = emptyList()
+                                )
+                            }
+                            "d" -> {
+                                //Domain type
+                                val typeNotNull = rs.getBoolean("typnotnull")
+                                val wraps = rs.getInt("typbasetype")
+                                val wrappedType = mapPostgresType(connection, wraps, !typeNotNull)
+                                val domain = domains.getOrPut(oid){
+                                    DomainType(postgresName, wrappedType)
+                                }
+                                return TypeRepr(
+                                    base = domain.className,
+                                    nullable = nullable ?: true,
+                                    params = emptyList(),
+                                    oid = oid,
+                                    sqlRepr = wrappedType.sqlRepr,
+                                    convertToSql = { wrappedType.convertToSql(ConvertToSqlContext("$paramName.raw")) },
+                                    convertFromSql = {
+                                        "${domain.className}(${
+                                            wrappedType.convertFromSql(
+                                                ConvertFromSqlContext(resultName)
+                                            )
+                                        })"
+                                    }
+                                )
+                            }
+                            "e" -> {
+                                //Enum type
+                                val enum = enums.getOrPut(oid){
+                                    connection.constructEnumType(postgresName, oid)
+                                }
+                                return TypeRepr(
+                                    base = enum.className,
+                                    nullable = nullable ?: true,
+                                    params = emptyList(),
+                                    oid = oid,
+                                    sqlRepr = String::class.asClassName(),
+                                    convertToSql = { "$paramName.toString()" },
+                                    convertFromSql = { "${enum.className}.valueOf($resultName as String)" },
+                                    isEnum = true
+                                )
+                            }
+                            "p" -> {
+                                //Pseudo type
+                                throw IllegalStateException("Unknown pseudo-type $postgresName")
+                            }
+                            "r" -> {
+                                //Range type
+                                //https://www.postgresql.org/docs/current/catalog-pg-range.html
+                                val range = connection.getRangeTypeInfo(oid) ?: throw IllegalStateException("Can't find range type $postgresName")
+                                val rangeType = mapPostgresType(connection, range, false)
+                                return TypeRepr(
+                                    base = Range::class.asTypeName(),
+                                    oid = oid,
+                                    nullable = nullable ?: true,
+                                    params = listOf(rangeType)
+                                )
+                            }
+                            else -> throw IllegalStateException("Unknown typtype $typeType")
                         }
-                        "p" -> {
-                            //Pseudo type
-                            throw IllegalStateException("Unknown pseudo-type $postgresName")
-                        }
-                        "r" -> {
-                            //Range type
-                            //https://www.postgresql.org/docs/current/catalog-pg-range.html
-                            val range = connection.getRangeTypeInfo(oid) ?: throw IllegalStateException("Can't find range type $postgresName")
-                            val rangeType = mapPostgresType(connection, range, false)
-                            return TypeRepr(
-                                base = Range::class.asTypeName(),
-                                oid = oid,
-                                nullable = nullable ?: true,
-                                params = listOf(rangeType)
-                            )
-                        }
-                        else -> throw IllegalStateException("Unknown typtype $typeType")
+                    } else {
+                        throw IllegalStateException("Type is undefined: $oid, $postgresName")
                     }
                 } else {
-                    throw IllegalStateException("Type is undefined: $oid, $postgresName")
+                    throw IllegalStateException("Cannot find oid $oid")
                 }
-            } else {
-                throw IllegalStateException("Cannot find oid $oid")
             }
         }
 	}

@@ -120,7 +120,7 @@ internal fun renderSqlBuilder(composite : CompositeType) : TypeSpec {
     return type.build()
 }
 
-private fun FunSpec.Builder.addPropertyParameter(clazz : TypeSpec.Builder, name : String, type : TypeName, private : Boolean = true) : FunSpec.Builder {
+fun FunSpec.Builder.addPropertyParameter(clazz : TypeSpec.Builder, name : String, type : TypeName, private : Boolean = true) : FunSpec.Builder {
     this.addParameter(name, type)
     clazz.addProperty(
         PropertySpec.builder(
