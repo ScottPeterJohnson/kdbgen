@@ -34,7 +34,7 @@ dependencies {
 Add the following annotation anywhere in your project:
 ```kotlin
 @SqlGenerationSettings(
-	databaseUrl = "jdbc:postgresql://localhost:5432/DATABASE?user=DATABASE_USER&password=DATABASE_PASSWORD"
+	databaseUrl = "jdbc:pgsql://localhost:5432/DATABASE?user=DATABASE_USER&password=DATABASE_PASSWORD"
 )
 private class GeneratePostgres
 ```

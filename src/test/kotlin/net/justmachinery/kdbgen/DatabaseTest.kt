@@ -1,22 +1,22 @@
 package net.justmachinery.kdbgen
 
+import com.impossibl.postgres.api.jdbc.PGConnection
 import io.kotlintest.AbstractSpec
 import io.kotlintest.TestType
 import io.kotlintest.specs.IntelliMarker
 import net.justmachinery.kdbgen.kapt.SqlGenerationSettings
-import org.postgresql.jdbc.PgConnection
 import java.sql.Connection
 import java.sql.DriverManager
 import java.util.*
 
-private const val TEST_DATABASE_URL : String = "jdbc:postgresql://localhost:5432/kdbgentest?user=kdbgentest&password=kdbgentest"
+private const val TEST_DATABASE_URL : String = "jdbc:pgsql://localhost:5432/kdbgentest?user=kdbgentest&password=kdbgentest"
 
 
 @SqlGenerationSettings(
 	databaseUrl = TEST_DATABASE_URL
 )
 abstract class DatabaseTest : AbstractSpec(), IntelliMarker {
-	val connection = DriverManager.getConnection(TEST_DATABASE_URL, Properties()) as PgConnection
+	val connection = DriverManager.getConnection(TEST_DATABASE_URL, Properties()) as PGConnection
 	init {
 		connection.autoCommit = false
         connection.createStatement().use {

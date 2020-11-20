@@ -1,18 +1,19 @@
 package net.justmachinery.kdbgen.generation.sqlquery
+import com.impossibl.postgres.api.jdbc.PGConnection
+import com.impossibl.postgres.jdbc.PGDriver
+import com.impossibl.postgres.jdbc.PGParameterMetaData
+import com.impossibl.postgres.protocol.ResultField
+import com.impossibl.postgres.types.Type
 import com.squareup.kotlinpoet.ClassName
-import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
-import com.squareup.kotlinpoet.TypeName
-import net.justmachinery.kdbgen.generation.EnumType
-import net.justmachinery.kdbgen.generation.RenderingContext
-import net.justmachinery.kdbgen.generation.generateEnumTypes
+import net.justmachinery.kdbgen.generation.TypeContext
+import net.justmachinery.kdbgen.generation.TypeRepr
 import net.justmachinery.kdbgen.kapt.AnnotationContext
 import net.justmachinery.kdbgen.kapt.SqlQuery
-import org.postgresql.core.QueryExecutor
-import org.postgresql.jdbc.PgConnection
-import org.postgresql.jdbc.PgStatement
-import java.sql.Connection
+import org.apache.commons.lang3.reflect.FieldUtils
 import java.sql.DriverManager
 import java.sql.ResultSetMetaData
+import java.sql.SQLType
+import java.sql.Types
 import java.util.*
 import java.util.regex.Pattern
 import javax.lang.model.element.Element
@@ -25,20 +26,18 @@ internal class SqlQueryWrapperGenerator(
     val context : AnnotationContext,
     val prelude : String
 ) : AutoCloseable {
-    private val connection : Connection
-    val enumTypes : List<EnumType>
-    private val renderingContext : RenderingContext
+    private val connection : PGConnection
+    val typeContext : TypeContext
     init {
-        DriverManager.registerDriver(org.postgresql.Driver())
+        DriverManager.registerDriver(PGDriver())
         connection = DriverManager.getConnection(
             context.settings.databaseUrl,
             Properties()
-        ) as PgConnection
+        ) as PGConnection
 
         initializePrelude()
 
-        enumTypes = generateEnumTypes(connection)
-        renderingContext = RenderingContext(context.settings, enumTypes)
+        typeContext = TypeContext(context.settings)
     }
 
     private fun initializePrelude(){
@@ -49,18 +48,10 @@ internal class SqlQueryWrapperGenerator(
         }
     }
 
-    private fun convertTypeRepr(repr : RenderingContext.TypeRepr) : TypeName {
-        return ClassName.bestGuess(repr.base)
-            .let {
-                if(repr.params.isNotEmpty()) it.parameterizedBy(*repr.params.map { param -> convertTypeRepr(param) }.toTypedArray()) else it
-            }
-            .let {
-                if(repr.nullable){ it.copy(nullable = true) } else { it.copy(nullable = false) }
-            }
-    }
 
-    private fun getTypeRepr(name : String, nullable : Boolean) : TypeName {
-        return convertTypeRepr(renderingContext.mapPostgresType(name, nullable))
+
+    private fun getTypeRepr(oid : Int, nullable : Boolean) : TypeRepr {
+        return typeContext.mapPostgresType(connection, oid, nullable)
     }
 
 
@@ -85,6 +76,7 @@ internal class SqlQueryWrapperGenerator(
         ))
     }
 
+
     private fun getMetadata(query : SqlQuery, element : Element) : SqlQueryData? {
         try {
             val name = query.name
@@ -95,9 +87,10 @@ internal class SqlQueryWrapperGenerator(
 
             val prep = connection.prepareStatement(replacedQuery)
             prep.use {
-                val parameterMetaData = prep.parameterMetaData!!
+                val parameterMetaData = prep.parameterMetaData!!.unwrap(PGParameterMetaData::class.java)
 
-
+                @Suppress("UNCHECKED_CAST")
+                val paramOids = FieldUtils.readField(parameterMetaData, "parameterTypes", true) as Array<Type>
                 val inputs = (1..parameterMetaData.parameterCount).map {
                     var paramName = mapping.getValue(it)
                     val nullable: Boolean
@@ -107,15 +100,17 @@ internal class SqlQueryWrapperGenerator(
                     } else {
                         nullable = false
                     }
+                    val typeRepr = getTypeRepr(paramOids[it-1].oid, nullable)
                     InputParameter(
-                        type = getTypeRepr(parameterMetaData.getParameterTypeName(it), nullable),
+                        type = typeRepr,
                         sqlTypeName = parameterMetaData.getParameterTypeName(it),
-                        sqlTypeCode = parameterMetaData.getParameterType(it),
+                        //It's unclear why for enums the parameter metadata returns the VARCHAR type.
+                        sqlTypeCode = if(typeRepr.isEnum) Types.OTHER else parameterMetaData.getParameterType(it),
                         parameterName = paramName
                     )
                 }
 
-                prep.unwrap(PgStatement::class.java).executeWithFlags(QueryExecutor.QUERY_ONESHOT or QueryExecutor.QUERY_DESCRIBE_ONLY or QueryExecutor.QUERY_SUPPRESS_BEGIN)
+                /*prep.unwrap(PGPreparedStatement::class.java).executeWithFlags(QueryExecutor.QUERY_ONESHOT or QueryExecutor.QUERY_DESCRIBE_ONLY or QueryExecutor.QUERY_SUPPRESS_BEGIN)*/
 
 
 
@@ -129,45 +124,27 @@ internal class SqlQueryWrapperGenerator(
                 val className = outputClassName.toClassName()
 
                 val resultSets = mutableListOf<ResultSetData>()
-                //Note that for weird Postgres reasons, we cannot get updateCounts with a
-                //describe-only query. These will have to be skipped at query execution time.
-                while(true){
-                    if (prep.updateCount != -1 || prep.resultSet == null) {
-                        resultSets.add(ResultSetData(
-                            columns = emptyList(),
-                            innerResultName = null
-                        ))
-                    } else {
-                        val metaData: ResultSetMetaData = prep.metaData
-                        val outputs = ((1..metaData.columnCount).map {
-                            OutputColumn(
-                                columnName = metaData.getColumnName(it),
-                                type = getTypeRepr(
-                                    metaData.getColumnTypeName(it),
-                                    metaData.isNullable(it) == ResultSetMetaData.columnNullable
-                                )
-                            )
-                        })
-                        resultSets.add(ResultSetData(
-                            columns = outputs,
-                            innerResultName = query.subResultNames.getOrNull(resultSets.size)?.let { if(it.isBlank()) null else it }?.let { it.toClassName() }
-                        ))
-                    }
+                val metaData: ResultSetMetaData = prep.metaData
+                @Suppress("UNCHECKED_CAST") val resultOids = (FieldUtils.readField(metaData, "resultFields", true) as Array<ResultField>).map { it.typeRef.oid }
 
-                    if(!prep.moreResults){
-                       if(prep.updateCount == -1){
-                           break
-                       }
-                    }
-                }
-
-
-
-                val finalQuery = castEnumParameters(statement, inputs)
+                val outputs = ((1..metaData.columnCount).map {
+                    OutputColumn(
+                        columnName = metaData.getColumnName(it),
+                        type = getTypeRepr(
+                            resultOids[it-1],
+                            metaData.isNullable(it) != ResultSetMetaData.columnNoNulls
+                        )
+                    )
+                })
+                resultSets.add(ResultSetData(
+                    columns = outputs,
+                    innerResultName = query.subResultNames.getOrNull(resultSets.size)?.let { if(it.isBlank()) null else it }
+                        ?.toClassName()
+                ))
 
                 return SqlQueryData(
                     name = name,
-                    query = finalQuery,
+                    query = replacedQuery,
                     inputs = inputs,
                     resultSets = resultSets,
                     outerResultName = className,
@@ -175,7 +152,7 @@ internal class SqlQueryWrapperGenerator(
                 )
             }
         } catch(t : Throwable){
-            context.processingEnv.messager.printMessage(Diagnostic.Kind.ERROR, "Could not process query \"${query.name}\": $t", element)
+            context.processingEnv.messager.printMessage(Diagnostic.Kind.ERROR, "Could not process query \"${query.name}\": $t\n${t.stackTrace.joinToString("\n")}", element)
             return null
         }
     }
@@ -188,17 +165,6 @@ internal class SqlQueryWrapperGenerator(
             "?"
         }
         return Pair(transformed, bindings)
-    }
-    private fun castEnumParameters(originalQuery: String, typeInfo : List<InputParameter>): String {
-        val typeInfoIter = typeInfo.iterator()
-        return overNamedParameters(originalQuery) {
-            val info = typeInfoIter.next()
-            if(renderingContext.postgresTypeToEnum.containsKey(info.sqlTypeName)){
-                "CAST(? AS ${info.sqlTypeName})"
-            } else {
-                "?"
-            }
-        }
     }
     private fun overNamedParameters(query : String, replacement : (String)->String) : String {
         val matcher = Pattern.compile("(?<!:):(\\w+\\??)").matcher(query)
@@ -224,7 +190,7 @@ internal class ResultSetData(
     val columns : List<OutputColumn>,
     val innerResultName : ClassName?
 )
-internal data class InputParameter(val type : TypeName, val sqlTypeName : String, val sqlTypeCode : Int, val parameterName : String)
-internal data class OutputColumn(val columnName : String, val type : TypeName)
+internal data class InputParameter(val type : TypeRepr, val sqlTypeName : String, val sqlTypeCode : Int, val parameterName : String)
+internal data class OutputColumn(val columnName : String, val type : TypeRepr)
 
 internal data class QueryContainerContents(val containerInterfaceName : String, val contents : List<SqlQueryData>)

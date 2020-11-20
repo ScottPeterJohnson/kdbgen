@@ -25,3 +25,23 @@ CREATE TABLE common_test (
 	uuid UUID PRIMARY KEY,
 	timestamp TIMESTAMP DEFAULT (localtimestamp) NOT NULL
 )
+
+CREATE TABLE xml_test (
+	uuid UUID PRIMARY KEY,
+	text xml not null
+)
+
+CREATE TABLE range_test (
+	interval daterange not null
+)
+
+CREATE TYPE inventory_item AS (
+    name            text,
+    supplier_id     integer,
+    price           numeric
+);
+
+CREATE TABLE on_hand (
+    item      inventory_item,
+    count     integer
+);

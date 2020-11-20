@@ -5,16 +5,17 @@ import java.net.URI
 import java.util.*
 
 plugins {
+	val kotlinVersion = "1.4.10"
 	`java-gradle-plugin`
 	maven
 	`maven-publish`
-	kotlin("jvm").version("1.3.61")
-	id("com.jfrog.bintray").version("1.8.4")
-	id("org.jetbrains.kotlin.kapt").version("1.3.61")
+	kotlin("jvm").version(kotlinVersion)
+	id("com.jfrog.bintray").version("1.8.5")
+	id("org.jetbrains.kotlin.kapt").version(kotlinVersion)
 }
 
 allprojects {
-	version = "0.8.12"
+	version = "0.9.0"
 	group = "net.justmachinery.kdbgen"
 
 
@@ -95,11 +96,10 @@ val test by tasks.getting(Test::class) {
 dependencies {
 	testCompile(project(":generator"))
 	kaptTest(project(":generator"))
-	testCompile("org.postgresql:postgresql:42.2.5")
+	testCompile("com.impossibl.pgjdbc-ng:pgjdbc-ng:0.8.6")
 	testCompile("io.kotlintest:kotlintest-runner-junit5:3.1.8")
 	testImplementation("org.junit.jupiter:junit-jupiter-api:5.3.1")
 	testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.3.1")
-	implementation("org.jetbrains.kotlin:kotlin-reflect:1.3.10")
 }
 
 description = "Testing master project for kdbgen"

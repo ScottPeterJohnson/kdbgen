@@ -3,7 +3,8 @@ package net.justmachinery.kdbgen.generation.sqlquery
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import net.justmachinery.kdbgen.ConnectionProvider
-import net.justmachinery.kdbgen.generation.renderEnumTypes
+import net.justmachinery.kdbgen.generation.ConvertFromSqlContext
+import net.justmachinery.kdbgen.generation.ConvertToSqlContext
 import java.io.File
 import javax.lang.model.element.Element
 import javax.tools.Diagnostic
@@ -27,13 +28,25 @@ internal class GenerateCode(private val generator : SqlQueryWrapperGenerator) {
                 }
                 .useSiteTarget(AnnotationSpec.UseSiteTarget.FILE)
                 .build())
-            it.addImport("net.justmachinery.kdbgen.utility", "convertFromResultSetObject", "convertToParameterType")
         }
     }
 
     fun generateCode(){
-        if(generator.enumTypes.isNotEmpty()){
-            renderEnumTypes(fileBuilderFor("EnumTypes"), generator.enumTypes)
+        generator.typeContext.enums.let {
+            if(it.isNotEmpty()){
+                renderEnumTypes(fileBuilderFor("EnumTypes"), it.values.toList())
+            }
+        }
+        generator.typeContext.domains.let {
+            if(it.isNotEmpty()){
+                renderDomainTypes(fileBuilderFor("DomainTypes"), it.values.toList())
+            }
+        }
+
+        generator.typeContext.composites.let {
+            if(it.isNotEmpty()){
+                renderCompositeTypes(fileBuilderFor("CompositeTypes"), it.values.toList())
+            }
         }
 
         for(query in generator.globalQueries){
@@ -178,11 +191,11 @@ internal class GenerateCode(private val generator : SqlQueryWrapperGenerator) {
 
                             val primaryConstructor = FunSpec.constructorBuilder()
                             for (column in resultSet.columns) {
-                                primaryConstructor.addParameter(column.columnName, column.type)
+                                primaryConstructor.addParameter(column.columnName, column.type.asTypeName())
                                 resultClassBuilder.addProperty(
                                     PropertySpec.builder(
                                         column.columnName,
-                                        column.type
+                                        column.type.asTypeName()
                                     ).initializer(column.columnName).build()
                                 )
                             }
@@ -197,7 +210,7 @@ internal class GenerateCode(private val generator : SqlQueryWrapperGenerator) {
                         }
                         when {
                             returnsDirectType -> ResultSetOutput.DirectType(
-                                resultSet.columns.single().type,
+                                resultSet.columns.single().type.asTypeName(),
                                 resultWrapperClassName
                             )
                             returnsUserType -> ResultSetOutput.ExistingConstructedType(
@@ -260,14 +273,14 @@ internal class GenerateCode(private val generator : SqlQueryWrapperGenerator) {
             }
 
             for((name, params) in namedParameters){
-                function.addParameter(name, params.first().type)
+                function.addParameter(name, params.first().type.asTypeName())
             }
 
             function.addStatement("val connection = this.getConnection()")
             function.beginControlFlow("connection.prepareStatement(%S).use", query.query)
             function.addStatement("prepared ->")
             for((index, param) in query.inputs.withIndex()){
-                function.addStatement("prepared.setObject(${index+1}, convertToParameterType(${param.parameterName}, \"${param.sqlTypeName}\", connection), ${param.sqlTypeCode})")
+                function.addStatement("prepared.setObject(${index+1}, ${param.type.convertToSql(ConvertToSqlContext(param.parameterName))}, ${param.sqlTypeCode})")
             }
 
             function.addStatement("prepared.execute()")
@@ -306,7 +319,13 @@ internal class GenerateCode(private val generator : SqlQueryWrapperGenerator) {
                             function.beginControlFlow("while(rs$index.next())")
 
                             for((columnIndex, column) in resultSet.columns.withIndex()){
-                                function.addStatement("val out$columnIndex = convertFromResultSetObject(rs$index.getObject(\"${column.columnName}\"), %T::`${column.columnName}`.returnType) as %T", returns.extractWrapper(), column.type)
+                                function.addStatement(
+                                    "val out$columnIndex = rs$index.getObject(\"${column.columnName}\"${if (column.type.isBase) "" else ", ${column.type.sqlRepr}::class.java"}).let { result -> ${
+                                        column.type.convertFromSql(
+                                            ConvertFromSqlContext("result")
+                                        )
+                                    } }"
+                                )
                             }
 
                             if(returns is ResultSetOutput.DirectType){

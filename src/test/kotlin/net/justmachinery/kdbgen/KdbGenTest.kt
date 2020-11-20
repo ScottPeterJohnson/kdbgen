@@ -1,5 +1,6 @@
 package net.justmachinery.kdbgen
 
+import com.impossibl.postgres.api.data.Range
 import io.kotlintest.matchers.beEmpty
 import io.kotlintest.should
 import io.kotlintest.shouldBe
@@ -8,6 +9,7 @@ import net.justmachinery.kdbgen.kapt.SqlPrelude
 import net.justmachinery.kdbgen.kapt.SqlQuery
 import net.justmachinery.kdbgen.sql.AnnotationQueriesTestQueries
 import net.justmachinery.kdbgen.sql.EnumTypeTest
+import net.justmachinery.kdbgen.sql.InventoryItem
 import net.justmachinery.kdbgen.testcustom.CustomClass
 import net.justmachinery.kdbgen.testcustom.CustomResultSet
 
@@ -51,6 +53,24 @@ class AnnotationQueriesTest : DatabaseTest(), AnnotationQueriesTestQueries {
     @SqlQuery("nullableArray",
         "select '{foo, bar, NULL}'::text[]"
     )
+	@SqlQuery("maxNullable",
+		"select max(address_id) from addresses"
+	)
+	@SqlQuery("xmlTest",
+		"select * from xml_test"
+	)
+	@SqlQuery("rangeInsert",
+		"insert into range_test (interval) values (:range)"
+	)
+	@SqlQuery("rangeTest",
+		"select * from range_test"
+	)
+	@SqlQuery("structInsert",
+		"insert into on_hand (item, count) values (:item, :count)"
+	)
+	@SqlQuery("structTest",
+		"select * from on_hand"
+	)
 	fun test(){
 		"should be able to do basic operations" {
 			sql {
@@ -64,7 +84,34 @@ class AnnotationQueriesTest : DatabaseTest(), AnnotationQueriesTestQueries {
 				selectAllUsers() should beEmpty()
 				foobaz(3)
 				casting().first() shouldBe "13"
-                nullableArray().first().first() shouldBe "foo"
+                nullableArray().first()?.first() shouldBe "foo"
+			}
+		}
+		"max() should be nullable" {
+			sql {
+				maxNullable().single() shouldBe null
+			}
+		}
+        "can we even do structs" {
+            sql {
+				val item = InventoryItem("foo", 0, 3.5)
+				structInsert(item, 5)
+                val otherItem = structTest().map { it.item }.single()
+				item.name shouldBe otherItem?.name
+				item.supplier_id shouldBe otherItem?.supplier_id
+				item.price?.toDouble() shouldBe otherItem?.price?.toDouble()
+
+            }
+        }
+		"behold xml operations" {
+			sql {
+				xmlTest()
+			}
+		}
+		"ranges should parse" {
+			sql {
+				rangeInsert(Range.create(null, true, null, true))
+				rangeTest()
 			}
 		}
 	}
@@ -80,7 +127,7 @@ class AnnotationQueriesTest : DatabaseTest(), AnnotationQueriesTestQueries {
 		}
 	}
 
-	@SqlQuery("multiResultSets", "SELECT * FROM enum_test; SELECT * FROM users")
+	/*@SqlQuery("multiResultSets", "SELECT * FROM enum_test; SELECT * FROM users")
 	@SqlQuery("namedMultiResultSets", "SELECT * FROM enum_test; SELECT * FROM users", "NamedMultiResultSet")
 	@SqlQuery("customResultSets", "SELECT * FROM unnest('{1,2}'::bigint[]); SELECT user_name FROM users", "net.justmachinery.kdbgen.testcustom.CustomResultSet")
 	@SqlQuery("nonResultSets", "SELECT * FROM enum_test; UPDATE enum_test SET enum_test_id = 0 WHERE false; DELETE FROM enum_test WHERE false; SELECT user_name FROM users   ")
@@ -95,12 +142,12 @@ class AnnotationQueriesTest : DatabaseTest(), AnnotationQueriesTestQueries {
 				nonResultSets()
             }
         }
-	}
+	}*/
 
 	init {
 		test()
 		enums()
-        multipleResultSets()
+        //multipleResultSets()
 	}
 }
 
