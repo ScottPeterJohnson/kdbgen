@@ -118,6 +118,10 @@ to the end of a parameter name. For example, `select * from users where name = :
 Keep in mind that nulls are special snowflakes in SQL. The above query for instance will never
 return any rows when passed null.
 
+#### Output parameter nullability
+Postgres does sometimes give nullability metadata on output parameters, but it can be shaky, and kdbgen
+assumes nullable where postgres isn't sure. You can override the nullability of output columns via the `columnCanBeNull` parameter to the `SqlQuery` annotation.
+
 #### Query result naming
 Assign a name to the query result using the `resultName` parameter of `@SqlQuery`.
 You can either use a simple name (`Foo`) and generate the wrapper class automatically,
@@ -138,6 +142,9 @@ If your views logically depend on each other, you can specify class dependencies
 BE CAREFUL to use "create temporary view" and not "create view". Otherwise, compiling will actually create the views
 in the database. (This apparently can't be worked around with read-only connections.)
 
+#### Drivers
+kdbgen runs against the pgjdbc-ng driver, but if you don't need struct support, the generated code should compile against the Postgres JDBC driver too.
+
+
 ## TODO
-- Transforming parameters/results could be optimized further
 - This approach could probably work with arbitrary SQL providers, not just Postgres. 

@@ -3,6 +3,7 @@ package net.justmachinery.kdbgen.generation.sqlquery
 import com.squareup.kotlinpoet.*
 import java.io.File
 import javax.lang.model.element.Element
+import javax.tools.Diagnostic
 
 internal class GenerateCode(val generator : KdbGenerator) {
     private val globallyOutputtedClasses = mutableSetOf<ClassName>()
@@ -33,56 +34,57 @@ internal class GenerateCode(val generator : KdbGenerator) {
     }
 
     fun generateCode(){
-        generator.typeContext.enums.let {
-            if(it.isNotEmpty()){
-                renderEnumTypes(fileBuilderFor("EnumTypes"), it.values.toList())
+        try {
+            generator.typeContext.enums.let {
+                if (it.isNotEmpty()) {
+                    renderEnumTypes(fileBuilderFor("EnumTypes"), it.values.toList())
+                }
             }
-        }
-        generator.typeContext.domains.let {
-            if(it.isNotEmpty()){
-                renderDomainTypes(fileBuilderFor("DomainTypes"), it.values.toList())
+            generator.typeContext.domains.let {
+                if (it.isNotEmpty()) {
+                    renderDomainTypes(fileBuilderFor("DomainTypes"), it.values.toList())
+                }
             }
-        }
 
-        generator.typeContext.composites.let {
-            if(it.isNotEmpty()){
-                renderCompositeTypes(fileBuilderFor("CompositeTypes"), it.values.toList())
+            generator.typeContext.composites.let {
+                if (it.isNotEmpty()) {
+                    renderCompositeTypes(fileBuilderFor("CompositeTypes"), it.values.toList())
+                }
             }
-        }
 
-        for(query in generator.globalQueries){
-            GenerateQuery(
-                generateCode = this,
-                fileBuilder = fileBuilderFor("GlobalQueries"),
-                container = null,
-                containerName = null,
-                query = query
-            )
-        }
-
-        for(container in generator.containerQueries){
-            val queryContainerInterface = TypeSpec.interfaceBuilder(container.containerInterfaceName)
-            val builder = fileBuilderFor(container.containerInterfaceName)
-            for(query in container.contents){
+            for (query in generator.globalQueries) {
                 GenerateQuery(
                     generateCode = this,
-                    fileBuilder = builder,
-                    container = queryContainerInterface,
-                    containerName = container.containerInterfaceName,
+                    fileBuilder = fileBuilderFor("GlobalQueries"),
+                    container = null,
+                    containerName = null,
                     query = query
                 )
             }
-            builder.addType(queryContainerInterface.build())
-        }
 
-        val outputDirectory = File(generator.context.settings.outputDirectory)
-        outputDirectory.resolve(generatedPackageName.replace('.','/')).deleteRecursively()
-        fileBuilders.values.forEach { builder ->
-            builder.build().writeTo(outputDirectory)
-        }
-        //TODO: Unclear whether there's a way to use the Filer API and also generate Kotlin source files.
-        //This precludes incremental annotation processing.
-        /*generator.context.processingEnv.filer.createResource(
+            for (container in generator.containerQueries) {
+                val queryContainerInterface = TypeSpec.interfaceBuilder(container.containerInterfaceName)
+                val builder = fileBuilderFor(container.containerInterfaceName)
+                for (query in container.contents) {
+                    GenerateQuery(
+                        generateCode = this,
+                        fileBuilder = builder,
+                        container = queryContainerInterface,
+                        containerName = container.containerInterfaceName,
+                        query = query
+                    )
+                }
+                builder.addType(queryContainerInterface.build())
+            }
+
+            val outputDirectory = File(generator.context.settings.outputDirectory)
+            outputDirectory.resolve(generatedPackageName.replace('.', '/')).deleteRecursively()
+            fileBuilders.values.forEach { builder ->
+                builder.build().writeTo(outputDirectory)
+            }
+            //TODO: Unclear whether there's a way to use the Filer API and also generate Kotlin source files.
+            //This precludes incremental annotation processing.
+            /*generator.context.processingEnv.filer.createResource(
             StandardLocation.SOURCE_OUTPUT,
             generatedPackageName,
             "Queries.kt",
@@ -90,6 +92,9 @@ internal class GenerateCode(val generator : KdbGenerator) {
         ).openWriter().use {
             fileBuilder.build().writeTo(it)
         }*/
+        } catch(g : GeneratingException){
+            generator.context.processingEnv.messager.printMessage(Diagnostic.Kind.ERROR, g.msg, g.element)
+        }
     }
 
 

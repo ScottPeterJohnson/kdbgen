@@ -258,9 +258,11 @@ internal class TypeContext(val settings: Settings) {
 
     private fun Connection.constructEnumType(postgresName : PostgresName, oid : Int) : EnumType {
         val values = mutableListOf<String>()
-        val valuesRs = prepareStatement("SELECT * FROM pg_enum WHERE enumtypid = $oid order by enumsortorder asc").executeQuery()
-        while (valuesRs.next()) {
-            values.add(valuesRs.getString("enumlabel"))
+        prepareStatement("SELECT * FROM pg_enum WHERE enumtypid = $oid order by enumsortorder asc").use {
+            val valuesRs = it.executeQuery()
+            while (valuesRs.next()) {
+                values.add(valuesRs.getString("enumlabel"))
+            }
         }
         return EnumType(postgresName, values)
     }
