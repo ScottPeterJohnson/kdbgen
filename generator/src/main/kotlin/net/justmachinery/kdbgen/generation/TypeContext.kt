@@ -49,6 +49,21 @@ internal class TypeRepr(
         .let {
             if(nullable){ it.copy(nullable = true) } else { it.copy(nullable = false) }
         }
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as TypeRepr
+
+        if (oid != other.oid) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        return oid
+    }
 }
 
 internal class TypeContext(val settings: Settings) {

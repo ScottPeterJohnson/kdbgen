@@ -15,7 +15,7 @@ plugins {
 }
 
 allprojects {
-	version = "0.9.1"
+	version = "0.9.4"
 	group = "net.justmachinery.kdbgen"
 
 
@@ -27,7 +27,6 @@ allprojects {
 
 }
 subprojects {
-	apply(plugin = "org.gradle.java-gradle-plugin")
 	apply(plugin = "org.gradle.maven")
 	apply(plugin = "org.gradle.maven-publish")
 	apply(plugin = "org.jetbrains.kotlin.jvm")

@@ -17,7 +17,7 @@ import java.util.*
 @QueryContainer
 class AnnotationQueriesTest : DatabaseTest(), AnnotationQueriesTestQueries {
 	@SqlQuery("addition",
-		"SELECT 1 + :addendum AS foobar"
+		"SELECT :addendum::bigint + :addendum AS foobar"
 	)
 	@SqlQuery("insertUser",
 		"""INSERT INTO users(user_name) VALUES (:name) RETURNING *"""
@@ -71,6 +71,9 @@ class AnnotationQueriesTest : DatabaseTest(), AnnotationQueriesTestQueries {
 	)
 	@SqlQuery("structTest",
 		"select * from on_hand"
+	)
+	@SqlQuery("aUserByAnyOtherName",
+		"""SELECT u1.user_name as name1, u2.user_name as name2 FROM users u1 join users u2 using (email_address) WHERE u1.user_name = :name?"""
 	)
 	fun test(){
 		"should be able to do basic operations" {

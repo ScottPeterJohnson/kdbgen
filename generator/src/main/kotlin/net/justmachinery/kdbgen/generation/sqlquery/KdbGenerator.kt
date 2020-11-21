@@ -90,7 +90,7 @@ internal class KdbGenerator(
 
                 @Suppress("UNCHECKED_CAST")
                 val paramOids = FieldUtils.readField(parameterMetaData, "parameterTypes", true) as Array<Type>
-                val inputs = (1..parameterMetaData.parameterCount).map {
+                val rawInputs = (1..parameterMetaData.parameterCount).map {
                     var paramName = mapping.getValue(it)
                     val nullable: Boolean
                     if (paramName.endsWith("?")) {
@@ -108,6 +108,19 @@ internal class KdbGenerator(
                         parameterName = paramName
                     )
                 }
+
+                val rawInputsByName = rawInputs.groupBy { it.parameterName }
+
+                for(values in rawInputsByName.values){
+                    if(!values.all { it == values.first() }) {
+                        throw GeneratingException(
+                            "In query ${query.name}, types of named parameter ${values.first().parameterName} in multiple locations do not match: $values",
+                            element
+                        )
+                    }
+                }
+
+                val namedParameters = rawInputsByName.values.map { it.first() }
 
                 /*prep.unwrap(PGPreparedStatement::class.java).executeWithFlags(QueryExecutor.QUERY_ONESHOT or QueryExecutor.QUERY_DESCRIBE_ONLY or QueryExecutor.QUERY_SUPPRESS_BEGIN)*/
 
@@ -128,7 +141,7 @@ internal class KdbGenerator(
 
                 val outputs = ((1..metaData.columnCount).map {
                     OutputColumn(
-                        columnName = metaData.getColumnName(it),
+                        columnName = metaData.getColumnLabel(it),
                         type = getTypeRepr(
                             oid = resultOids[it-1],
                             nullable = if(query.columnCanBeNull.isNotEmpty() && query.columnCanBeNull.size >= it){
@@ -148,7 +161,10 @@ internal class KdbGenerator(
                 return SqlQueryData(
                     name = name,
                     query = replacedQuery,
-                    inputs = inputs,
+                    inputs = InputInfo(
+                        namedParameters = namedParameters,
+                        orderedPlaceholderList = rawInputs
+                    ),
                     resultSets = resultSets,
                     outerResultName = className,
                     element = element
@@ -184,10 +200,14 @@ internal class KdbGenerator(
 internal data class SqlQueryData(
     val name : String,
     val query : String,
-    val inputs : List<InputParameter>,
+    val inputs : InputInfo,
     val resultSets : List<ResultSetData>,
     val outerResultName : ClassName?,
     val element : Element
+)
+internal data class InputInfo(
+    val namedParameters : List<InputParameter>,
+    val orderedPlaceholderList : List<InputParameter>
 )
 internal class ResultSetData(
     val columns : List<OutputColumn>,

@@ -34,19 +34,7 @@ internal class GenerateQuery(
 
 
 
-
-    private val namedParameters = query.inputs.groupBy { it.parameterName }
-
     init {
-        //Sanity check named parameters
-        for(values in namedParameters.values){
-            if(!values.all { it == values.first() }) {
-                throw GeneratingException(
-                    "In query ${query.name}, types of named parameter ${values.first().parameterName} in multiple locations do not match: $values",
-                    query.element
-                )
-            }
-        }
         try {
             val resultClasses = GenerateQueryResult(this).generate()
             val queryClass = generateQueryClass(resultClasses)
@@ -93,11 +81,11 @@ internal class GenerateQuery(
             function.returns(List::class.asTypeName().parameterizedBy(output.extractName()))
         }
 
-        for((name, params) in namedParameters){
-            function.addParameter(name, params.first().type.asTypeName())
+        for(param in query.inputs.namedParameters){
+            function.addParameter(param.parameterName, param.type.asTypeName())
         }
 
-        function.beginControlFlow("return prepare(${namedParameters.keys.joinToString(", "){ "$it = $it" }}).use")
+        function.beginControlFlow("return prepare(${query.inputs.namedParameters.joinToString(", ") { "${it.parameterName} = ${it.parameterName}" }}).use")
         function.addStatement("it.execute()")
         function.addStatement("extract(it)")
         function.endControlFlow()
@@ -110,13 +98,13 @@ internal class GenerateQuery(
 
         function.returns(PreparedStatement::class)
 
-        for((name, params) in namedParameters){
-            function.addParameter(name, params.first().type.asTypeName())
+        for(param in query.inputs.namedParameters){
+            function.addParameter(param.parameterName, param.type.asTypeName())
         }
 
         function.addStatement("val connection = connectionProvider.getConnection()")
         function.addStatement("val prepared = connection.prepareStatement(%S)", query.query)
-        for((index, param) in query.inputs.withIndex()){
+        for((index, param) in query.inputs.orderedPlaceholderList.withIndex()){
             function.addStatement("prepared.setObject(${index+1}, ${param.type.convertToSql(ConvertToSqlContext(param.parameterName))}, ${param.sqlTypeCode})")
         }
 
