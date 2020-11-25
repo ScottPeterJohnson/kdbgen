@@ -59,7 +59,7 @@ internal class GenerateCode(val generator : KdbGenerator) {
                     container = null,
                     containerName = null,
                     query = query
-                )
+                ).run()
             }
 
             for (container in generator.containerQueries) {
@@ -72,7 +72,7 @@ internal class GenerateCode(val generator : KdbGenerator) {
                         container = queryContainerInterface,
                         containerName = container.containerInterfaceName,
                         query = query
-                    )
+                    ).run()
                 }
                 builder.addType(queryContainerInterface.build())
             }

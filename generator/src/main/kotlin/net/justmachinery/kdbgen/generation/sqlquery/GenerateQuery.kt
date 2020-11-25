@@ -34,7 +34,7 @@ internal class GenerateQuery(
 
 
 
-    init {
+    fun run(){
         try {
             val resultClasses = GenerateQueryResult(this).generate()
             val queryClass = generateQueryClass(resultClasses)
@@ -63,6 +63,8 @@ internal class GenerateQuery(
             fileBuilder.addProperty(property)
         }
     }
+
+
     private fun generateQueryClass(output : ResultSetOutput) : ClassName {
         return generateClass("Query"){
             val primaryConstructor = FunSpec.constructorBuilder()
@@ -70,7 +72,16 @@ internal class GenerateQuery(
             it.primaryConstructor(primaryConstructor.build())
             it.addFunction(generateInvokeFunction(output))
             it.addFunction(generatePrepareFunction())
+            it.addFunction(generateExecuteFunction())
             it.addFunction(generateExtractFunction(output))
+
+            if(hasArrayInputs){
+                it.addProperty(PropertySpec.builder(
+                    name = "__arrays",
+                    type = ArrayList::class.asTypeName().parameterizedBy(java.sql.Array::class.asTypeName()),
+                    KModifier.PRIVATE
+                ).initializer("ArrayList()").build())
+            }
         }
     }
 
@@ -86,10 +97,20 @@ internal class GenerateQuery(
         }
 
         function.beginControlFlow("return prepare(${query.inputs.namedParameters.joinToString(", ") { "${it.parameterName} = ${it.parameterName}" }}).use")
-        function.addStatement("it.execute()")
+        function.addStatement("execute(it)")
         function.addStatement("extract(it)")
         function.endControlFlow()
 
+        return function.build()
+    }
+
+    private fun generateExecuteFunction() : FunSpec {
+        val function = FunSpec.builder("execute")
+        function.addParameter("prepared", PreparedStatement::class)
+        function.addStatement("prepared.execute()")
+        if(hasArrayInputs){
+            function.addStatement("__arrays.forEach { it.free() }")
+        }
         return function.build()
     }
 
@@ -167,4 +188,6 @@ internal class GenerateQuery(
         }
         return function.build()
     }
+
+    private val hasArrayInputs = query.inputs.namedParameters.any { it.type.requireArraySupport }
 }

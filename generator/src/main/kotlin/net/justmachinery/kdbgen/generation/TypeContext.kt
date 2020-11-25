@@ -2,7 +2,6 @@ package net.justmachinery.kdbgen.generation
 
 import com.impossibl.postgres.api.data.Range
 import com.impossibl.postgres.api.jdbc.PGConnection
-import com.impossibl.postgres.api.jdbc.PGType
 import com.impossibl.postgres.jdbc.PGDirectConnection
 import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
@@ -11,8 +10,6 @@ import com.squareup.kotlinpoet.asClassName
 import com.squareup.kotlinpoet.asTypeName
 import net.justmachinery.kdbgen.generation.utility.Json
 import java.sql.Connection
-import java.sql.JDBCType
-import java.sql.SQLType
 
 internal data class ConvertToSqlContext(
     val paramName : String
@@ -38,7 +35,8 @@ internal class TypeRepr(
     val convertToSql : ConvertToSql = { paramName },
     convertFromSql : ConvertFromSql? = null,
     val isEnum : Boolean = false,
-    val isBase : Boolean = false
+    val isBase : Boolean = false,
+    val requireArraySupport : Boolean = false
 ){
     val convertFromSql : ConvertFromSql = convertFromSql ?: { "$resultName as ${asTypeName()}" }
 
@@ -49,6 +47,8 @@ internal class TypeRepr(
         .let {
             if(nullable){ it.copy(nullable = true) } else { it.copy(nullable = false) }
         }
+
+
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -63,6 +63,10 @@ internal class TypeRepr(
 
     override fun hashCode(): Int {
         return oid
+    }
+
+    override fun toString(): String {
+        return "TypeRepr(base=$base, nullable=$nullable, params=$params, oid=$oid, sqlRepr=$sqlRepr, convertToSql=$convertToSql, isEnum=$isEnum, isBase=$isBase, isArray=$requireArraySupport, convertFromSql=$convertFromSql)"
     }
 }
 
@@ -111,11 +115,12 @@ internal class TypeContext(val settings: Settings) {
                                 oid = oid,
                                 sqlRepr = java.sql.Array::class.asClassName(),
                                 convertToSql = {
-                                    "net.justmachinery.kdbgen.utility.convertToArray(${paramName}, \"${postgresName.unqualified}\", connection){ ${arrayType.convertToSql(ConvertToSqlContext("it")) } }"
+                                    "net.justmachinery.kdbgen.utility.convertToArray(${paramName}, \"${postgresName.unqualified}\", connection){ ${arrayType.convertToSql(ConvertToSqlContext("it")) } }.also { __arrays.add(it) }"
                                 },
                                 convertFromSql = {
-                                    "net.justmachinery.kdbgen.utility.convertFromArray(${resultName}){ ${arrayType.convertFromSql(ConvertFromSqlContext("it")) } }"
-                                }
+                                    "net.justmachinery.kdbgen.utility.convertFromArray(${resultName}){ ${arrayType.convertFromSql(ConvertFromSqlContext("it")) } }.also { $resultName.free() }"
+                                },
+                                requireArraySupport = true
                             )
                         }
 
@@ -173,7 +178,8 @@ internal class TypeContext(val settings: Settings) {
                                                 ConvertFromSqlContext(resultName)
                                             )
                                         })"
-                                    }
+                                    },
+                                    requireArraySupport = wrappedType.requireArraySupport
                                 )
                             }
                             "e" -> {
@@ -205,7 +211,8 @@ internal class TypeContext(val settings: Settings) {
                                     base = Range::class.asTypeName(),
                                     oid = oid,
                                     nullable = nullable ?: true,
-                                    params = listOf(rangeType)
+                                    params = listOf(rangeType),
+                                    requireArraySupport = rangeType.requireArraySupport
                                 )
                             }
                             else -> throw IllegalStateException("Unknown typtype $typeType")

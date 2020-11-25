@@ -13,7 +13,7 @@ inline fun <T> convertFromArray(
 	}
 }
 inline fun <T> convertToArray(
-	value : List<T>,
+	value : Collection<T>,
 	postgresType : String,
 	connection: Connection,
 	subConvert : (T)->Any?

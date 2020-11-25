@@ -2,6 +2,7 @@ package net.justmachinery.kdbgen
 
 import com.impossibl.postgres.api.data.Range
 import io.kotlintest.matchers.beEmpty
+import io.kotlintest.matchers.plusOrMinus
 import io.kotlintest.should
 import io.kotlintest.shouldBe
 import net.justmachinery.kdbgen.kapt.QueryContainer
@@ -50,9 +51,6 @@ class AnnotationQueriesTest : DatabaseTest(), AnnotationQueriesTestQueries {
     @SqlQuery("prelude",
         "select * from prelude_test"
     )
-    @SqlQuery("nullableArray",
-        "select '{foo, bar, NULL}'::text[]"
-    )
 	@SqlQuery("maxNullable",
 		"select max(address_id) from addresses"
 	)
@@ -78,7 +76,7 @@ class AnnotationQueriesTest : DatabaseTest(), AnnotationQueriesTestQueries {
 	fun test(){
 		"should be able to do basic operations" {
 			sql {
-				addition(3).first() shouldBe 4
+				addition(3).first() shouldBe 6
 				insertUser("foobar")
 				selectAllUsers().first().user_name shouldBe "foobar"
 				nullableSelect(null)
@@ -88,7 +86,6 @@ class AnnotationQueriesTest : DatabaseTest(), AnnotationQueriesTestQueries {
 				selectAllUsers() should beEmpty()
 				foobaz(3)
 				casting().first() shouldBe "13"
-                nullableArray().first()?.first() shouldBe "foo"
 			}
 		}
 		"max() should be nullable" {
@@ -109,7 +106,7 @@ class AnnotationQueriesTest : DatabaseTest(), AnnotationQueriesTestQueries {
                 val otherItem = structTest().map { it.item }.single()
 				item.name shouldBe otherItem?.name
 				item.supplier_id shouldBe otherItem?.supplier_id
-				item.price?.toDouble() shouldBe otherItem?.price?.toDouble()
+				item.price?.toDouble() shouldBe (otherItem?.price?.toDouble()?.plusOrMinus(0.01))
 
             }
         }
@@ -121,6 +118,22 @@ class AnnotationQueriesTest : DatabaseTest(), AnnotationQueriesTestQueries {
 		}
 	}
 
+
+	@SqlQuery("nullableArray",
+		"select '{foo, bar, NULL}'::text[]"
+	)
+	@SqlQuery("arrayParameter",
+		"select :array::text[]"
+	)
+	fun arrays(){
+		"should be able to select arrays" {
+			sql {
+				nullableArray().first()?.first() shouldBe "foo"
+				arrayParameter(listOf("test","test","test"))
+				System.gc() //PGBuffersArray might log an error if not freed properly
+			}
+		}
+	}
 
 	@SqlQuery("xmlTest",
 		"select * from xml_test"
@@ -149,25 +162,9 @@ class AnnotationQueriesTest : DatabaseTest(), AnnotationQueriesTestQueries {
 		}
 	}
 
-	/*@SqlQuery("multiResultSets", "SELECT * FROM enum_test; SELECT * FROM users")
-	@SqlQuery("namedMultiResultSets", "SELECT * FROM enum_test; SELECT * FROM users", "NamedMultiResultSet")
-	@SqlQuery("customResultSets", "SELECT * FROM unnest('{1,2}'::bigint[]); SELECT user_name FROM users", "net.justmachinery.kdbgen.testcustom.CustomResultSet")
-	@SqlQuery("nonResultSets", "SELECT * FROM enum_test; UPDATE enum_test SET enum_test_id = 0 WHERE false; DELETE FROM enum_test WHERE false; SELECT user_name FROM users   ")
-	fun multipleResultSets(){
-        "multi result sets should work"{
-            sql {
-                enumTestInsert(EnumTypeTest.test2)
-                insertUser("foobar")
-                multiResultSets()
-                namedMultiResultSets()
-                customResultSets() shouldBe CustomResultSet(listOf(1,2), listOf("foobar"))
-				nonResultSets()
-            }
-        }
-	}*/
-
 	init {
 		test()
+		arrays()
 		xml()
 		enums()
         //multipleResultSets()
