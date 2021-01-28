@@ -17,7 +17,7 @@ internal fun renderEnumTypes(builder : FileSpec.Builder, types : List<EnumType>)
         for(value in type.values){
             enum.addEnumConstant(value)
         }
-        builder.addType(enum.build())
+        builder.addTypeIfNotExists(enum.build())
     }
 }
 
@@ -29,7 +29,7 @@ internal fun renderDomainTypes(builder : FileSpec.Builder, types : List<DomainTy
             .addPropertyParameter(clazz, "raw", type.wraps.asTypeName())
             .build())
 
-        builder.addType(clazz.build())
+        builder.addTypeIfNotExists(clazz.build())
     }
 }
 
@@ -58,7 +58,7 @@ internal fun renderCompositeTypes(builder : FileSpec.Builder, types : List<Compo
 
         clazz.addType(renderSqlBuilder(type))
 
-        builder.addType(clazz.build())
+        builder.addTypeIfNotExists(clazz.build())
     }
 }
 

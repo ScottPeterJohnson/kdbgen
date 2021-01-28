@@ -27,7 +27,7 @@ internal class GenerateQuery(
         if(container != null){
             container.addType(builder.build())
         } else {
-            fileBuilder.addType(builder.build())
+            fileBuilder.addTypeIfNotExists(builder.build())
         }
         return className
     }

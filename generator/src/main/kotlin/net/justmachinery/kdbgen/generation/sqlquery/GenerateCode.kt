@@ -11,7 +11,7 @@ internal class GenerateCode(val generator : KdbGenerator) {
         if(globallyOutputtedClasses.add(name)){
             val builder = TypeSpec.classBuilder(name)
             construct(builder)
-            fileBuilderFor("SharedResultClasses").addType(builder.build())
+            fileBuilderFor("SharedResultClasses").addTypeIfNotExists(builder.build())
         }
     }
 
@@ -101,3 +101,16 @@ internal class GenerateCode(val generator : KdbGenerator) {
 }
 
 class GeneratingException(val msg : String, val element : Element) : RuntimeException()
+
+fun FileSpec.Builder.addTypeIfNotExists(type: TypeSpec){
+    if(type.name != null){
+        val alreadyExists = try {
+            Class.forName(packageName + "." + type.name)
+            true
+        } catch(t : ClassNotFoundException){
+            false
+        }
+        if(alreadyExists){ return }
+    }
+    this.addType(type)
+}

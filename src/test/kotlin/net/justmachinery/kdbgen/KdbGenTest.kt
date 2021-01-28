@@ -1,5 +1,6 @@
 package net.justmachinery.kdbgen
 
+import MainModule
 import com.impossibl.postgres.api.data.Range
 import io.kotlintest.matchers.beEmpty
 import io.kotlintest.matchers.plusOrMinus
@@ -156,6 +157,7 @@ class AnnotationQueriesTest : DatabaseTest(), AnnotationQueriesTestQueries {
 	fun enums(){
 		"enums should work" {
 			sql {
+				MainModule().testProp shouldBe EnumTypeTest.test2
 				enumTestInsert(EnumTypeTest.test2)
 				enumTestSelect().first().enum_test shouldBe EnumTypeTest.test2
 			}

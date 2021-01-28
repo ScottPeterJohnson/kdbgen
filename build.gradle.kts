@@ -15,7 +15,7 @@ plugins {
 }
 
 allprojects {
-	version = "0.9.5"
+	version = "0.9.6"
 	group = "net.justmachinery.kdbgen"
 
 
@@ -93,10 +93,11 @@ val test by tasks.getting(Test::class) {
 }
 
 dependencies {
-	testCompile(project(":generator"))
+	implementation(project(":core"))
+	kapt(project(":generator"))
 	kaptTest(project(":generator"))
-	testCompile("com.impossibl.pgjdbc-ng:pgjdbc-ng:0.8.6")
-	testCompile("io.kotlintest:kotlintest-runner-junit5:3.1.8")
+	implementation("com.impossibl.pgjdbc-ng:pgjdbc-ng:0.8.6")
+	testImplementation("io.kotlintest:kotlintest-runner-junit5:3.1.8")
 	testImplementation("org.junit.jupiter:junit-jupiter-api:5.3.1")
 	testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.3.1")
 }
