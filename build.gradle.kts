@@ -1,28 +1,23 @@
-
-import com.jfrog.bintray.gradle.BintrayExtension
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
-import java.net.URI
-import java.util.*
 
 plugins {
-	val kotlinVersion = "1.4.10"
 	`java-gradle-plugin`
 	maven
 	`maven-publish`
+	signing
+	val kotlinVersion = "1.4.31"
 	kotlin("jvm").version(kotlinVersion)
-	id("com.jfrog.bintray").version("1.8.5")
 	id("org.jetbrains.kotlin.kapt").version(kotlinVersion)
 }
 
 allprojects {
-	version = "0.9.6"
+	version = "0.9.7"
 	group = "net.justmachinery.kdbgen"
 
 
 	repositories {
 		mavenCentral()
 		jcenter()
-		maven { url = URI("https://dl.bintray.com/scottpjohnson/generic/") }
 	}
 
 }
@@ -30,48 +25,74 @@ subprojects {
 	apply(plugin = "org.gradle.maven")
 	apply(plugin = "org.gradle.maven-publish")
 	apply(plugin = "org.jetbrains.kotlin.jvm")
-	apply(plugin = "com.jfrog.bintray")
 	apply(plugin = "org.jetbrains.kotlin.kapt")
+	apply(plugin = "org.gradle.signing")
 
+	val sourcesJar by tasks.registering(Jar::class){
+		archiveClassifier.set("sources")
+		from(sourceSets.main.get().allSource)
+	}
+	val javadocJar by tasks.registering(Jar::class){
+		dependsOn.add(JavaPlugin.JAVADOC_TASK_NAME)
+		archiveClassifier.set("javadoc")
+		from(tasks.getByName("javadoc"))
+	}
 
-    tasks.register<Jar>("sourcesJar") {
-        classifier = "sources"
-        from(sourceSets["main"].allSource)
-    }
+	artifacts {
+		archives(sourcesJar)
+		archives(javadocJar)
+	}
 
+	val projectName = name
 	publishing {
-		(publications) {
-			create<MavenPublication>("kdbgen-$name") {
-				from(components["java"])
-				groupId = group as String
-				artifactId = name
-				version = project.version as String?
-				artifact(tasks.getByName("sourcesJar"))
+		publications {
+			create<MavenPublication>("mavenKotlin") {
+				artifactId = "kdbgen-$projectName"
+				from(components["kotlin"])
+				pom {
+					name.set("Kdbgen $projectName")
+					description.set("$description")
+					url.set("https://github.com/ScottPeterJohnson/shade")
+					licenses {
+						license {
+							name.set("The Apache License, Version 2.0")
+							url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
+						}
+					}
+					developers {
+						developer {
+							id.set("scottj")
+							name.set("Scott Johnson")
+							email.set("mavenkdbgen@justmachinery.net")
+						}
+					}
+					scm {
+						connection.set("scm:git:git://github.com/ScottPeterJohnson/kdbgen.git")
+						developerConnection.set("scm:git:ssh://github.com/ScottPeterJohnson/kdbgen.git")
+						url.set("http://github.com/ScottPeterJohnson/kdbgen")
+					}
+				}
+				artifact(sourcesJar)
+				artifact(javadocJar)
+			}
+		}
+		repositories {
+			maven {
+				name = "central"
+				val releasesRepoUrl = uri("https://oss.sonatype.org/service/local/staging/deploy/maven2/")
+				val snapshotsRepoUrl = uri("https://oss.sonatype.org/content/repositories/snapshots/")
+				url = if (version.toString().endsWith("SNAPSHOT")) snapshotsRepoUrl else releasesRepoUrl
+				credentials {
+					username = findProperty("ossrhUsername") as? String
+					password = findProperty("ossrhPassword") as? String
+				}
 			}
 		}
 	}
 
-	bintray {
-		user = project.property("BINTRAY_USER") as String?
-		key = project.property("BINTRAY_KEY") as String?
-		publish = true
-
-		val pkgOps = closureOf<BintrayExtension.PackageConfig> {
-			repo = "generic"
-			name = "kdbgen-${project.name}"
-			vcsUrl = "https://github.com/ScottPeterJohnson/kdbgen.git"
-			version(closureOf<BintrayExtension.VersionConfig> {
-				name = project.version as String?
-				desc = "${project.name} version ${project.version}"
-				released = Date().toString()
-				vcsTag = "${project.version}"
-			})
-			setProperty("licenses", arrayOf("Apache-2.0"))
-		}
-		pkg(pkgOps)
-		this.setProperty("publications", arrayOf("kdbgen-$name"))
+	signing {
+		sign(publishing.publications["mavenKotlin"])
 	}
-
 }
 
 allprojects {
