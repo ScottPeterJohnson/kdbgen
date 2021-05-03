@@ -118,7 +118,7 @@ internal class TypeContext(val settings: Settings) {
                                     "net.justmachinery.kdbgen.utility.convertToArray(${paramName}, \"${postgresName.unqualified}\", connection){ ${arrayType.convertToSql(ConvertToSqlContext("it")) } }.also { __arrays.add(it) }"
                                 },
                                 convertFromSql = {
-                                    "net.justmachinery.kdbgen.utility.convertFromArray(${resultName}){ ${arrayType.convertFromSql(ConvertFromSqlContext("it")) } }.also { $resultName.free() }"
+                                    "try { net.justmachinery.kdbgen.utility.convertFromArray(${resultName}){ ${arrayType.convertFromSql(ConvertFromSqlContext("it")) } } } finally { $resultName.free() }"
                                 },
                                 requireArraySupport = true
                             )

@@ -107,10 +107,13 @@ internal class GenerateQuery(
     private fun generateExecuteFunction() : FunSpec {
         val function = FunSpec.builder("execute")
         function.addParameter("prepared", PreparedStatement::class)
+        function.beginControlFlow("try")
         function.addStatement("prepared.execute()")
+        function.nextControlFlow("finally")
         if(hasArrayInputs){
             function.addStatement("__arrays.forEach { it.free() }")
         }
+        function.endControlFlow()
         return function.build()
     }
 

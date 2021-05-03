@@ -11,7 +11,7 @@ plugins {
 }
 
 allprojects {
-	version = "0.9.7"
+	version = "0.9.8"
 	group = "net.justmachinery.kdbgen"
 
 
@@ -52,7 +52,7 @@ subprojects {
 				pom {
 					name.set("Kdbgen $projectName")
 					description.set("$description")
-					url.set("https://github.com/ScottPeterJohnson/shade")
+					url.set("https://github.com/ScottPeterJohnson/kdbgen")
 					licenses {
 						license {
 							name.set("The Apache License, Version 2.0")
