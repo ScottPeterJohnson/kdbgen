@@ -5,13 +5,13 @@ plugins {
 	maven
 	`maven-publish`
 	signing
-	val kotlinVersion = "1.4.31"
+	val kotlinVersion = "1.5.31"
 	kotlin("jvm").version(kotlinVersion)
 	id("org.jetbrains.kotlin.kapt").version(kotlinVersion)
 }
 
 allprojects {
-	version = "0.9.8"
+	version = "0.9.9"
 	group = "net.justmachinery.kdbgen"
 
 
@@ -117,7 +117,7 @@ dependencies {
 	implementation(project(":core"))
 	kapt(project(":generator"))
 	kaptTest(project(":generator"))
-	implementation("com.impossibl.pgjdbc-ng:pgjdbc-ng:0.8.6")
+	implementation("com.impossibl.pgjdbc-ng:pgjdbc-ng:0.8.9")
 	testImplementation("io.kotlintest:kotlintest-runner-junit5:3.1.8")
 	testImplementation("org.junit.jupiter:junit-jupiter-api:5.3.1")
 	testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.3.1")
