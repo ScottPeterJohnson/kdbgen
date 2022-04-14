@@ -69,7 +69,7 @@ internal class GenerateQueryResult(
                                 clazz = resultClassBuilder,
                                 name = column.columnName,
                                 type = column.type.asTypeName(),
-                                private = false
+                                modifier = KModifier.PUBLIC
                             )
                         }
                         resultClassBuilder.primaryConstructor(primaryConstructor.build())
@@ -86,7 +86,7 @@ internal class GenerateQueryResult(
                             is ResultSetName.Autogenerate -> {
                                 generate.generateClass(
                                     "Result${if (isMultiOuterResult) index.toString() else ""}"
-                                ){ generateOutput(it) }
+                                ){ it, name -> generateOutput(it) }
                             }
                         },
                         resultSet
@@ -126,7 +126,7 @@ internal class GenerateQueryResult(
                     outerName
                 }
                 else -> {
-                    generate.generateClass("Result", ::generateOutput)
+                    generate.generateClass("Result", { it, _ -> generateOutput(it) })
                 }
             }
         } else {

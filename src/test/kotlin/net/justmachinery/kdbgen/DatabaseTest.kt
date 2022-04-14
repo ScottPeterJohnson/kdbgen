@@ -1,9 +1,9 @@
 package net.justmachinery.kdbgen
 
 import com.impossibl.postgres.api.jdbc.PGConnection
-import io.kotlintest.AbstractSpec
-import io.kotlintest.TestType
-import io.kotlintest.specs.IntelliMarker
+import io.kotest.core.spec.style.FreeSpec
+import io.kotest.core.test.TestCase
+import io.kotest.core.test.TestResult
 import net.justmachinery.kdbgen.kapt.SqlGenerationSettings
 import java.sql.Connection
 import java.sql.DriverManager
@@ -15,7 +15,7 @@ private const val TEST_DATABASE_URL : String = "jdbc:pgsql://localhost:5432/kdbg
 @SqlGenerationSettings(
 	databaseUrl = TEST_DATABASE_URL
 )
-abstract class DatabaseTest : AbstractSpec(), IntelliMarker {
+abstract class DatabaseTest : FreeSpec() {
 	val connection = DriverManager.getConnection(TEST_DATABASE_URL, Properties()) as PGConnection
 	init {
 		connection.autoCommit = false
@@ -28,16 +28,12 @@ abstract class DatabaseTest : AbstractSpec(), IntelliMarker {
 			return connection
 		}
 	}
-	fun sql(cb : ConnectionProvider.()->Unit){
-		cb(connectionProvider)
+
+	override suspend fun afterAny(testCase: TestCase, result: TestResult) {
+		connection.rollback()
 	}
 
-	infix operator fun String.invoke(run: () -> Unit) {
-		addTestCase(this, {
-			try { run() }
-			finally {
-				connection.rollback()
-			}
-		}, defaultTestCaseConfig, TestType.Test)
+	fun sql(cb : ConnectionProvider.()->Unit){
+		cb(connectionProvider)
 	}
 }

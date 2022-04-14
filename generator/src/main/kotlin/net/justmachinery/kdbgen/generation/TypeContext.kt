@@ -233,6 +233,7 @@ internal class TypeContext(val settings: Settings) {
             "java.lang.Long" -> Long::class.qualifiedName
             "java.lang.Float" -> Float::class.qualifiedName
             "java.lang.Double" -> Double::class.qualifiedName
+            "java.lang.Short" -> Short::class.qualifiedName
             "java.lang.Boolean" -> Boolean::class.qualifiedName
             "java.lang.String" -> String::class.qualifiedName
             "java.lang.Number" -> Number::class.qualifiedName

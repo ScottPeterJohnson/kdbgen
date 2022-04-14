@@ -24,7 +24,8 @@ internal class GenerateCode(val generator : KdbGenerator) {
                         "UNCHECKED_CAST",
                         "RemoveRedundantBackticks",
                         "RemoveRedundantQualifierName",
-                        "UNUSED_PARAMETER"
+                        "UNUSED_PARAMETER",
+                        "USELESS_CAST",
                     ).forEach { an ->
                         it.addMember(CodeBlock.of("\"$an\""))
                     }

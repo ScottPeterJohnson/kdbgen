@@ -40,7 +40,7 @@ internal fun renderCompositeTypes(builder : FileSpec.Builder, types : List<Compo
         clazz.primaryConstructor(FunSpec.constructorBuilder()
             .apply {
                 type.columns.forEach {
-                    addPropertyParameter(clazz, it.name, it.repr.asTypeName(), private = false)
+                    addPropertyParameter(clazz, it.name, it.repr.asTypeName(), modifier = KModifier.PUBLIC)
                 }
             }
             .build())
@@ -120,14 +120,14 @@ internal fun renderSqlBuilder(composite : CompositeType) : TypeSpec {
     return type.build()
 }
 
-fun FunSpec.Builder.addPropertyParameter(clazz : TypeSpec.Builder, name : String, type : TypeName, private : Boolean = true) : FunSpec.Builder {
+fun FunSpec.Builder.addPropertyParameter(clazz : TypeSpec.Builder, name : String, type : TypeName, modifier : KModifier = KModifier.PRIVATE) : FunSpec.Builder {
     this.addParameter(name, type)
     clazz.addProperty(
         PropertySpec.builder(
             name,
             type
         ).initializer(name)
-            .apply { if(private) { addModifiers(KModifier.PRIVATE) }  }.build()
+            .apply { addModifiers(modifier)  }.build()
     )
     return this
 }

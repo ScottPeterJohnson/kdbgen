@@ -2,16 +2,16 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
 	`java-gradle-plugin`
-	maven
 	`maven-publish`
 	signing
-	val kotlinVersion = "1.5.31"
+	val kotlinVersion = "1.6.20"
 	kotlin("jvm").version(kotlinVersion)
 	id("org.jetbrains.kotlin.kapt").version(kotlinVersion)
+	id("com.github.ben-manes.versions").version("0.42.0")  //For finding outdated dependencies
 }
 
 allprojects {
-	version = "0.9.9"
+	version = "0.9.11"
 	group = "net.justmachinery.kdbgen"
 
 
@@ -22,7 +22,6 @@ allprojects {
 
 }
 subprojects {
-	apply(plugin = "org.gradle.maven")
 	apply(plugin = "org.gradle.maven-publish")
 	apply(plugin = "org.jetbrains.kotlin.jvm")
 	apply(plugin = "org.jetbrains.kotlin.kapt")
@@ -118,9 +117,12 @@ dependencies {
 	kapt(project(":generator"))
 	kaptTest(project(":generator"))
 	implementation("com.impossibl.pgjdbc-ng:pgjdbc-ng:0.8.9")
-	testImplementation("io.kotlintest:kotlintest-runner-junit5:3.1.8")
-	testImplementation("org.junit.jupiter:junit-jupiter-api:5.3.1")
-	testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.3.1")
+	val kotestVersion = "5.2.3"
+	testImplementation("io.kotest:kotest-runner-junit5:$kotestVersion")
+	testImplementation("io.kotest:kotest-property:$kotestVersion")
+	val jupiterVersion = "5.8.2"
+	testImplementation("org.junit.jupiter:junit-jupiter-api:$jupiterVersion")
+	testImplementation("org.junit.jupiter:junit-jupiter-engine:$jupiterVersion")
 }
 
 description = "Testing master project for kdbgen"
