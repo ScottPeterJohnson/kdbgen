@@ -184,15 +184,18 @@ internal class GenerateQuery(
     private fun generateInvokeFunction(output : ResultSetOutput, paramHolder: ClassName) : FunSpec {
         val function = FunSpec.builder("invoke")
         function.addModifiers(KModifier.OPERATOR)
-        if(output !is ResultSetOutput.None){
-            function.returns(List::class.asTypeName().parameterizedBy(output.extractName()))
-        }
 
         for(param in query.inputs.namedParameters){
             function.addParameter(param.parameterName, param.type.asTypeName())
         }
 
-        function.addStatement("return invoke(${paramHolder}(${query.inputs.namedParameters.joinToString(", "){ "${it.parameterName} = ${it.parameterName}"}}))")
+        if(output !is ResultSetOutput.None){
+            function.returns(List::class.asTypeName().parameterizedBy(output.extractName()))
+            function.addStatement("return invoke(${paramHolder}(${query.inputs.namedParameters.joinToString(", "){ "${it.parameterName} = ${it.parameterName}"}}))")
+        } else {
+            function.addStatement("execute(${paramHolder}(${query.inputs.namedParameters.joinToString(", "){ "${it.parameterName} = ${it.parameterName}"}}))")
+        }
+
 
         return function.build()
     }

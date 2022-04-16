@@ -30,6 +30,20 @@ abstract class KdbGenQuery<Params, Result, Batch : BatchPreparation<Params, Resu
 			extract(prepared)
 		}
 	}
+	fun execute(params : Params) {
+		val connection = connectionProvider.getConnection()
+		val prepared = connection.prepareStatement(sql)
+		prepared.use {
+			setParameters(connection, prepared, params)
+			try {
+				prepared.execute()
+			} finally {
+				__arrays?.let {
+					it.forEach { it.free() }
+				}
+			}
+		}
+	}
 	fun batch(cb: Batch.()->Unit) : IntArray {
 		val connection = connectionProvider.getConnection()
 		val prepared = connection.prepareStatement(sql)
