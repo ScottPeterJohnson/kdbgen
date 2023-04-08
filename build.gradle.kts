@@ -4,14 +4,14 @@ plugins {
 	`java-gradle-plugin`
 	`maven-publish`
 	signing
-	val kotlinVersion = "1.6.20"
+	val kotlinVersion = "1.8.20"
 	kotlin("jvm").version(kotlinVersion)
 	id("org.jetbrains.kotlin.kapt").version(kotlinVersion)
-	id("com.github.ben-manes.versions").version("0.42.0")  //For finding outdated dependencies
+	id("com.github.ben-manes.versions").version("0.46.0")  //For finding outdated dependencies
 }
 
 allprojects {
-	version = "0.9.12"
+	version = "0.10.0"
 	group = "net.justmachinery.kdbgen"
 
 
@@ -103,9 +103,6 @@ allprojects {
 	compileTestKotlin.kotlinOptions {
 		jvmTarget = JavaVersion.VERSION_11.toString()
 	}
-	dependencies {
-        implementation(kotlin("stdlib-jdk8"))
-	}
 }
 
 val test by tasks.getting(Test::class) {
@@ -117,10 +114,10 @@ dependencies {
 	kapt(project(":generator"))
 	kaptTest(project(":generator"))
 	implementation("com.impossibl.pgjdbc-ng:pgjdbc-ng:0.8.9")
-	val kotestVersion = "5.2.3"
+	val kotestVersion = "5.5.5"
 	testImplementation("io.kotest:kotest-runner-junit5:$kotestVersion")
 	testImplementation("io.kotest:kotest-property:$kotestVersion")
-	val jupiterVersion = "5.8.2"
+	val jupiterVersion = "5.9.2"
 	testImplementation("org.junit.jupiter:junit-jupiter-api:$jupiterVersion")
 	testImplementation("org.junit.jupiter:junit-jupiter-engine:$jupiterVersion")
 }

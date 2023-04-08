@@ -1,4 +1,4 @@
-[ ![Download](https://api.bintray.com/packages/scottpjohnson/generic/kdbgen-core/images/download.svg) ](https://bintray.com/scottpjohnson/generic/kdbgen-core/_latestVersion)
+[ ![Download](https://maven-badges.herokuapp.com/maven-central/net.justmachinery.kdbgen/kdbgen-core/badge.svg) ](https://maven-badges.herokuapp.com/maven-central/net.justmachinery.kdbgen/kdbgen-core/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
  
  Experimental library for writing Postgres-compatible SQL in Kotlin via annotation processing. 
@@ -37,7 +37,7 @@ private class GeneratePostgres
 
 You will need to replace:
 - `DATABASE`, `DATABASE_USER`, `DATABASE_PASSWORD` with an accessible database/user/password (a local one, probably)
-- `<VERSION>` with the latest version of this repository (currently [ ![Download](https://api.bintray.com/packages/scottpjohnson/generic/kdbgen-core/images/download.svg) ](https://bintray.com/scottpjohnson/generic/kdbgen-core/_latestVersion))
+- `<VERSION>` with the latest version of this repository (currently [ ![Download](https://maven-badges.herokuapp.com/maven-central/net.justmachinery.kdbgen/kdbgen-core/badge.svg) ](https://maven-badges.herokuapp.com/maven-central/net.justmachinery.kdbgen/kdbgen-core/))
 
 ### Setup
 ```kotlin

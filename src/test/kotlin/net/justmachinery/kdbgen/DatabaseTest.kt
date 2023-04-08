@@ -24,8 +24,8 @@ abstract class DatabaseTest : FreeSpec() {
         }
 	}
 	val connectionProvider = object : ConnectionProvider {
-		override fun getConnection(): Connection {
-			return connection
+		override fun <T> useConnection(cb: (Connection) -> T): T {
+			return cb(connection)
 		}
 	}
 
