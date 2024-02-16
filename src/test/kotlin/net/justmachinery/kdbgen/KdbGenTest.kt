@@ -7,9 +7,8 @@ import io.kotest.matchers.shouldBe
 import net.justmachinery.kdbgen.kapt.QueryContainer
 import net.justmachinery.kdbgen.kapt.SqlPrelude
 import net.justmachinery.kdbgen.kapt.SqlQuery
-import net.justmachinery.kdbgen.sql.AnnotationQueriesTestQueries
-import net.justmachinery.kdbgen.sql.EnumTypeTest
-import net.justmachinery.kdbgen.sql.InventoryItem
+import net.justmachinery.kdbgen.sql.composites.InventoryItem
+import net.justmachinery.kdbgen.sql.enums.EnumTypeTest
 import net.justmachinery.kdbgen.testcustom.CustomClass
 import java.util.*
 

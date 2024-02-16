@@ -10,27 +10,26 @@ import net.justmachinery.kdbgen.generation.ConvertToSqlContext
 import java.lang.IllegalStateException
 import java.sql.Connection
 import java.sql.PreparedStatement
-import javax.tools.Diagnostic
 
 internal class GenerateQuery(
     val generateCode: GenerateCode,
     val fileBuilder : FileSpec.Builder,
     val container : TypeSpec.Builder?,
-    val containerName : String?,
+    val containerName : ClassName?,
     val query : SqlQueryData
 ) {
     fun generateClass(autogenName : String, cb: (TypeSpec.Builder, ClassName)->Unit) : ClassName {
         val finalName = query.name.capitalize() + autogenName
         val className = when {
-            container != null -> ClassName(generatedPackageName, containerName!!, finalName)
-            else -> ClassName(generatedPackageName, finalName)
+            container != null -> containerName!!.nestedClass(finalName)
+            else -> composeClassName(subpackage = containerName?.packageName ?: "globalqueries", name = finalName)
         }
         val builder = TypeSpec.classBuilder(className)
         cb(builder, className)
         if(container != null){
             container.addType(builder.build())
         } else {
-            fileBuilder.addTypeIfNotExists(builder.build())
+            fileBuilder.addType(builder.build())
         }
         return className
     }
@@ -44,8 +43,7 @@ internal class GenerateQuery(
             generateQueryGetter(queryClass)
 
         } catch(g : GeneratingException){
-            generateCode.generator.context.processingEnv.messager.printMessage(
-                Diagnostic.Kind.ERROR,
+            generateCode.generator.context.gen.logError(
                 g.msg,
                 g.element
             )

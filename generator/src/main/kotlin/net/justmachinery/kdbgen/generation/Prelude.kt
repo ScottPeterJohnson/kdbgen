@@ -1,24 +1,16 @@
 package net.justmachinery.kdbgen.generation
 
-import com.squareup.kotlinpoet.asTypeName
-import net.justmachinery.kdbgen.kapt.AnnotationContext
 import net.justmachinery.kdbgen.kapt.SqlPrelude
-import java.io.File
-import java.util.*
-import javax.lang.model.element.Element
-import javax.lang.model.type.MirroredTypesException
-import javax.tools.Diagnostic
-import javax.tools.StandardLocation
 
 internal class PreludeGenerator(private val context : AnnotationContext) {
     private val annotations = context.elements.prelude.flatMap { element ->
-        element.getAnnotationsByType(SqlPrelude::class.java)!!.map {
-            PreludeAnnotation(element, it)
+        element.getAnnotations(SqlPrelude::class.java).map {
+            PreludeAnnotation(element, it.parseSqlPrelude())
         }
 
     }
     private val byClass = annotations
-        .associateBy({ it.element.asType().asTypeName() }, { it })
+        .associateBy({ it.element.qualifiedName() }, { it })
     fun generate() : String {
         annotations.forEach {
             getAllDependencies(it, emptySet())
@@ -33,10 +25,7 @@ internal class PreludeGenerator(private val context : AnnotationContext) {
             it.annotation.sql
         }
         if(sorted.isNotEmpty()){
-            context.processingEnv.filer.createResource(StandardLocation.CLASS_OUTPUT, "", "prelude.sql").openWriter().use {
-                it.write(code)
-            }
-            File(context.settings.outputDirectory).resolve("prelude.sql").writeText(code)
+            context.gen.createResource("", "prelude", "sql", sorted.map { it.element }, aggregating = true, code)
         }
 
         return code
@@ -54,15 +43,10 @@ internal class PreludeGenerator(private val context : AnnotationContext) {
     private fun getAllDependencies(annotation : PreludeAnnotation, visited : Set<PreludeAnnotation>){
         annotation.transitiveDependencies?.let { return }
         if(visited.contains(annotation)){
-            context.processingEnv.messager.printMessage(Diagnostic.Kind.ERROR, "Circular dependency detected", annotation.element)
+            context.gen.logError("Circular dependency detected", annotation.element)
             throw IllegalStateException("Circular dependency detected")
         }
-        val dependencies = try {
-            annotation.annotation.dependencies.map { it.asTypeName() }
-        } catch(mte : MirroredTypesException){
-            val result = mte.typeMirrors.map { it.asTypeName() }
-            result
-        }.mapNotNull {
+        val dependencies = annotation.annotation.dependencies.mapNotNull {
             byClass[it]
         }
 
@@ -78,7 +62,7 @@ internal class PreludeGenerator(private val context : AnnotationContext) {
 }
 
 internal class PreludeAnnotation(
-    val element : Element,
-    val annotation : SqlPrelude,
+    val element : GenerateElement,
+    val annotation : SqlPreludeData,
     var transitiveDependencies : Set<PreludeAnnotation>? = null
 )

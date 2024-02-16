@@ -41,17 +41,28 @@ internal class GenerateQueryResult(
     }
 
     sealed class ResultSetName {
-        data class GlobalName(val className: ClassName) : ResultSetName()
+        data class GeneratedName(val simpleName : String) : ResultSetName()
+        data class ExistingName(val className: ClassName) : ResultSetName()
         object Autogenerate : ResultSetName()
     }
     private fun generateResultClasses() : List<ResultSetOutput> {
         return query.resultSets.withIndex().map { (index, resultSet) ->
-            val resultWrapperName: ResultSetName? = when {
-                query.outerResultName != null && !isMultiOuterResult -> ResultSetName.GlobalName(query.outerResultName!!)
-                resultSet.innerResultName != null -> ResultSetName.GlobalName(resultSet.innerResultName)
+
+            val resultName: String? = when {
+                query.outerResultName != null && !isMultiOuterResult -> query.outerResultName!!
+                resultSet.innerResultName != null -> resultSet.innerResultName
                 else -> {
-                    ResultSetName.Autogenerate
+                    null
                 }
+            }
+            val resultWrapperName = if(resultName != null && resultName.isNotBlank()){
+                if(resultName.contains(".")){
+                    ResultSetName.ExistingName(ClassName.bestGuess(resultName))
+                } else {
+                    ResultSetName.GeneratedName(resultName)
+                }
+            } else {
+                ResultSetName.Autogenerate
             }
 
             when {
@@ -76,17 +87,22 @@ internal class GenerateQueryResult(
                     }
 
                     ResultSetOutput.Wrapper(
-                        when (val result = resultWrapperName!!) {
-                            is ResultSetName.GlobalName -> {
-                                if (result.className.packageName == generatedPackageName) {
-                                    generate.generateCode.ensureGlobal(query.outerResultName!!){ generateOutput(it) }
-                                }
-                                result.className
+                        when (resultWrapperName) {
+                            is ResultSetName.ExistingName -> {
+                                resultWrapperName.className
                             }
                             is ResultSetName.Autogenerate -> {
                                 generate.generateClass(
                                     "Result${if (isMultiOuterResult) index.toString() else ""}"
                                 ){ it, name -> generateOutput(it) }
+                            }
+                            is ResultSetName.GeneratedName -> {
+                                val fullName = composeClassName(
+                                    basePackage = query.element.enclosingPackage(),
+                                    name = resultWrapperName.simpleName
+                                )
+                                generate.generateCode.ensureResultClass(fullName, sources = listOf(query.element)){ generateOutput(it) }
+                                fullName
                             }
                         },
                         resultSet
@@ -120,10 +136,13 @@ internal class GenerateQueryResult(
             val outerName = query.outerResultName
             when {
                 outerName != null -> {
-                    if(outerName.packageName == generatedPackageName){
-                        generate.generateCode.ensureGlobal(query.outerResultName!!, ::generateOutput)
+                    if(outerName.contains(".")){
+                        ClassName.bestGuess(outerName)
+                    } else {
+                        val fullOuterName = composeClassName(basePackage = query.element.enclosingPackage(), name = outerName)
+                        generate.generateCode.ensureResultClass(fullOuterName, sources = listOf(query.element), ::generateOutput)
+                        fullOuterName
                     }
-                    outerName
                 }
                 else -> {
                     generate.generateClass("Result", { it, _ -> generateOutput(it) })

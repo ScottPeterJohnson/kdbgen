@@ -6,60 +6,53 @@ import net.justmachinery.kdbgen.generation.CompositeType
 import net.justmachinery.kdbgen.generation.ConvertFromSqlContext
 import net.justmachinery.kdbgen.generation.DomainType
 import net.justmachinery.kdbgen.generation.EnumType
-import java.sql.JDBCType
 import java.sql.SQLData
 import java.sql.SQLInput
 import java.sql.SQLOutput
 
-internal fun renderEnumTypes(builder : FileSpec.Builder, types : List<EnumType>){
-    for(type in types){
-        val enum = TypeSpec.enumBuilder(type.className)
-        for(value in type.values){
-            enum.addEnumConstant(value)
-        }
-        builder.addTypeIfNotExists(enum.build())
+internal fun renderEnumType(builder : FileSpec.Builder, type : EnumType){
+    val enum = TypeSpec.enumBuilder(type.className)
+    for(value in type.values){
+        enum.addEnumConstant(value)
     }
+    builder.addType(enum.build())
 }
 
-internal fun renderDomainTypes(builder : FileSpec.Builder, types : List<DomainType>){
-    for(type in types){
-        val clazz = TypeSpec.classBuilder(type.className)
-        clazz.addModifiers(KModifier.DATA)
-        clazz.primaryConstructor(FunSpec.constructorBuilder()
-            .addPropertyParameter(clazz, "raw", type.wraps.asTypeName())
-            .build())
+internal fun renderDomainType(builder : FileSpec.Builder, type : DomainType){
+    val clazz = TypeSpec.classBuilder(type.className)
+    clazz.addModifiers(KModifier.DATA)
+    clazz.primaryConstructor(FunSpec.constructorBuilder()
+        .addPropertyParameter(clazz, "raw", type.wraps.asTypeName())
+        .build())
 
-        builder.addTypeIfNotExists(clazz.build())
-    }
+    builder.addType(clazz.build())
 }
 
-internal fun renderCompositeTypes(builder : FileSpec.Builder, types : List<CompositeType>){
-    for(type in types){
-        val clazz = TypeSpec.classBuilder(type.className)
-        clazz.addModifiers(KModifier.DATA)
-        clazz.primaryConstructor(FunSpec.constructorBuilder()
-            .apply {
-                type.columns.forEach {
-                    addPropertyParameter(clazz, it.name, it.repr.asTypeName(), modifier = KModifier.PUBLIC)
-                }
+internal fun renderCompositeType(builder : FileSpec.Builder, type : CompositeType){
+    val clazz = TypeSpec.classBuilder(type.className)
+    clazz.addModifiers(KModifier.DATA)
+    clazz.primaryConstructor(FunSpec.constructorBuilder()
+        .apply {
+            type.columns.forEach {
+                addPropertyParameter(clazz, it.name, it.repr.asTypeName(), modifier = KModifier.PUBLIC)
             }
-            .build())
+        }
+        .build())
 
-        val toSQL = FunSpec.builder("toSQL")
-            .returns(type.className.nestedClass("SqlData"))
-            .addCode(StringBuilder().apply {
-                appendln("val data = SqlData()")
-                type.columns.forEach { column ->
-                    appendln("data.${column.name} = ${column.name}")
-                }
-                appendln("return data")
-            }.toString())
-        clazz.addFunction(toSQL.build())
+    val toSQL = FunSpec.builder("toSQL")
+        .returns(type.className.nestedClass("SqlData"))
+        .addCode(StringBuilder().apply {
+            appendLine("val data = SqlData()")
+            type.columns.forEach { column ->
+                appendLine("data.${column.name} = ${column.name}")
+            }
+            appendLine("return data")
+        }.toString())
+    clazz.addFunction(toSQL.build())
 
-        clazz.addType(renderSqlBuilder(type))
+    clazz.addType(renderSqlBuilder(type))
 
-        builder.addTypeIfNotExists(clazz.build())
-    }
+    builder.addType(clazz.build())
 }
 
 internal fun renderSqlBuilder(composite : CompositeType) : TypeSpec {

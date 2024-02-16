@@ -16,6 +16,33 @@
   
 ## Use
 ### Install
+#### KSP (preferred)
+Enable [ksp](https://kotlinlang.org/docs/ksp-overview.html) in your gradle build file:
+```kotlin
+plugins {
+    id("com.google.devtools.ksp") version KSP_VERSION
+}
+```
+(You can find KSP releases [here](https://github.com/google/ksp?tab=readme-ov-file))
+
+Add kdbgen as a dependency:
+```kotlin
+dependencies {
+    implementation("net.justmachinery.kdbgen:kdbgen-core:<VERSION>")
+    ksp("net.justmachinery.kdbgen:kdbgen-generator:<VERSION>")
+}
+```
+Configure kdbgen KSP options:
+```kotlin
+ksp {
+	arg("kdbgenDatabaseUrl", "jdbc:pgsql://localhost:5432/DATABASE?user=DATABASE_USER&password=DATABASE_PASSWORD")
+}
+```
+You will need to replace:
+- `DATABASE`, `DATABASE_USER`, `DATABASE_PASSWORD` with an accessible database/user/password (a local one, probably)
+- `<VERSION>` with the latest version of this repository (currently [ ![Download](https://maven-badges.herokuapp.com/maven-central/net.justmachinery.kdbgen/kdbgen-core/badge.svg) ](https://maven-badges.herokuapp.com/maven-central/net.justmachinery.kdbgen/kdbgen-core/))
+
+#### Kapt (alternative)
 Make sure you have [kapt](https://kotlinlang.org/docs/reference/kapt.html) enabled.
 
 Add the following to your build.gradle where appropriate:

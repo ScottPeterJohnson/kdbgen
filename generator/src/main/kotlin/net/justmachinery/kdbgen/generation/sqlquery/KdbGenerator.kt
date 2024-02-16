@@ -5,9 +5,10 @@ import com.impossibl.postgres.jdbc.PGParameterMetaData
 import com.impossibl.postgres.protocol.ResultField
 import com.impossibl.postgres.types.Type
 import com.squareup.kotlinpoet.ClassName
+import net.justmachinery.kdbgen.generation.AnnotationContext
+import net.justmachinery.kdbgen.generation.GenerateElement
 import net.justmachinery.kdbgen.generation.TypeContext
 import net.justmachinery.kdbgen.generation.TypeRepr
-import net.justmachinery.kdbgen.kapt.AnnotationContext
 import net.justmachinery.kdbgen.kapt.SqlQuery
 import org.apache.commons.lang3.reflect.FieldUtils
 import java.sql.DriverManager
@@ -15,8 +16,6 @@ import java.sql.ResultSetMetaData
 import java.sql.Types
 import java.util.*
 import java.util.regex.Pattern
-import javax.lang.model.element.Element
-import javax.tools.Diagnostic
 
 
 internal const val generatedPackageName = "net.justmachinery.kdbgen.sql"
@@ -49,6 +48,8 @@ internal class KdbGenerator(
 
 
 
+
+    context(QueryElement)
     private fun getTypeRepr(oid : Int, nullable : Boolean) : TypeRepr {
         return typeContext.mapPostgresType(connection, oid, nullable)
     }
@@ -64,19 +65,28 @@ internal class KdbGenerator(
     val globalQueries = mutableListOf<SqlQueryData>()
     val containerQueries = mutableListOf<QueryContainerContents>()
 
-    fun processGlobalStatement(query : SqlQuery, element : Element){
-        getMetadata(query, element)?.let { globalQueries.add(it) }
+    fun processGlobalStatement(qe: QueryElement){
+        qe.run {
+            getMetadata()?.let { globalQueries.add(it) }
+        }
     }
 
-    fun processQueryContainer(containerName : String, queries : List<Pair<SqlQuery, Element>>){
+    fun processQueryContainer(parent: GenerateElement, containerName : String, queries : List<QueryElement>){
         containerQueries.add(QueryContainerContents(
-            containerName,
-            queries.mapNotNull { (annotation, element) -> getMetadata(annotation, element) }
+            parent = parent,
+            containerInterfaceName = containerName,
+            contents = queries.mapNotNull { qe ->
+                qe.run { getMetadata() }
+            }
         ))
     }
 
-
-    private fun getMetadata(query : SqlQuery, element : Element) : SqlQueryData? {
+    class QueryElement(
+        val query : SqlQuery,
+        val element: GenerateElement
+    )
+    context(QueryElement)
+    private fun getMetadata() : SqlQueryData? {
         try {
             val name = query.name
             val statement = query.query
@@ -126,14 +136,6 @@ internal class KdbGenerator(
 
 
 
-                fun String.toClassName() : ClassName? {
-                    return when {
-                        this.contains('.') -> ClassName.bestGuess(this)
-                        this.isNotBlank() -> ClassName(generatedPackageName, this)
-                        else -> null
-                    }
-                }
-                val className = outputClassName.toClassName()
 
                 val resultSets = mutableListOf<ResultSetData>()
                 val metaData: ResultSetMetaData = prep.metaData
@@ -155,7 +157,6 @@ internal class KdbGenerator(
                 resultSets.add(ResultSetData(
                     columns = outputs,
                     innerResultName = query.subResultNames.getOrNull(resultSets.size)?.let { if(it.isBlank()) null else it }
-                        ?.toClassName()
                 ))
 
                 return SqlQueryData(
@@ -166,12 +167,12 @@ internal class KdbGenerator(
                         orderedPlaceholderList = rawInputs
                     ),
                     resultSets = resultSets,
-                    outerResultName = className,
+                    outerResultName = outputClassName,
                     element = element
                 )
             }
         } catch(t : Throwable){
-            context.processingEnv.messager.printMessage(Diagnostic.Kind.ERROR, "Could not process query \"${query.name}\": $t\n${t.stackTrace.joinToString("\n")}", element)
+            context.gen.logError("Could not process query \"${query.name}\": $t\n${t.stackTrace.joinToString("\n")}", element)
             return null
         }
     }
@@ -202,8 +203,8 @@ internal data class SqlQueryData(
     val query : String,
     val inputs : InputInfo,
     val resultSets : List<ResultSetData>,
-    val outerResultName : ClassName?,
-    val element : Element
+    val outerResultName : String?,
+    val element : GenerateElement
 )
 internal data class InputInfo(
     val namedParameters : List<InputParameter>,
@@ -211,9 +212,9 @@ internal data class InputInfo(
 )
 internal class ResultSetData(
     val columns : List<OutputColumn>,
-    val innerResultName : ClassName?
+    val innerResultName : String?
 )
 internal data class InputParameter(val type : TypeRepr, val sqlTypeName : String, val sqlTypeCode : Int, val parameterName : String)
 internal data class OutputColumn(val columnName : String, val type : TypeRepr)
 
-internal data class QueryContainerContents(val containerInterfaceName : String, val contents : List<SqlQueryData>)
+internal data class QueryContainerContents(val parent : GenerateElement, val containerInterfaceName : String, val contents : List<SqlQueryData>)

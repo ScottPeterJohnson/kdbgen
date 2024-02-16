@@ -8,6 +8,8 @@ import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import com.squareup.kotlinpoet.TypeName
 import com.squareup.kotlinpoet.asClassName
 import com.squareup.kotlinpoet.asTypeName
+import net.justmachinery.kdbgen.generation.sqlquery.KdbGenerator
+import net.justmachinery.kdbgen.generation.sqlquery.composeClassName
 import net.justmachinery.kdbgen.generation.utility.Json
 import java.sql.Connection
 
@@ -75,6 +77,8 @@ internal class TypeContext(val settings: Settings) {
     internal val domains = mutableMapOf<Int, DomainType>()
     internal val composites = mutableMapOf<Int, CompositeType>()
 
+
+    context(KdbGenerator.QueryElement)
 	internal fun mapPostgresType(connection: PGConnection, oid : Int, nullable: Boolean?): TypeRepr {
         if(oid == 0){ return TypeRepr(
             base = Nothing::class.asTypeName(),
@@ -146,6 +150,8 @@ internal class TypeContext(val settings: Settings) {
                                 val composite = composites.getOrPut(oid){
                                     val typeRelId = rs.getInt("typrelid")
                                     connection.constructCompositeType(postgresName, typeRelId)
+                                }.also {
+                                    it.sources.add(element)
                                 }
                                 return TypeRepr(
                                     base = composite.className,
@@ -163,8 +169,8 @@ internal class TypeContext(val settings: Settings) {
                                 val wraps = rs.getInt("typbasetype")
                                 val wrappedType = mapPostgresType(connection, wraps, !typeNotNull)
                                 val domain = domains.getOrPut(oid){
-                                    DomainType(postgresName, wrappedType)
-                                }
+                                    DomainType(postgresName, wrappedType, mutableListOf())
+                                }.also { it.sources.add(element) }
                                 return TypeRepr(
                                     base = domain.className,
                                     nullable = nullable ?: true,
@@ -186,6 +192,8 @@ internal class TypeContext(val settings: Settings) {
                                 //Enum type
                                 val enum = enums.getOrPut(oid){
                                     connection.constructEnumType(postgresName, oid)
+                                }.also {
+                                    it.sources.add(element)
                                 }
                                 return TypeRepr(
                                     base = enum.className,
@@ -265,6 +273,7 @@ internal class TypeContext(val settings: Settings) {
         }
     }
 
+    context(KdbGenerator.QueryElement)
     private fun PGConnection.constructCompositeType(postgresName : PostgresName, typRelId : Int) : CompositeType {
         val columns = mutableListOf<CompositeTypeEntry>()
         val valuesRs = prepareStatement("SELECT * FROM pg_attribute WHERE attrelid = $typRelId order by attnum asc")
@@ -276,7 +285,7 @@ internal class TypeContext(val settings: Settings) {
             val name = valuesRs.getString("attname")
             columns.add(CompositeTypeEntry(name, representation))
         }
-        return CompositeType(postgresName, columns)
+        return CompositeType(postgresName, columns, sources = mutableListOf())
     }
 
     private fun Connection.constructEnumType(postgresName : PostgresName, oid : Int) : EnumType {
@@ -287,21 +296,22 @@ internal class TypeContext(val settings: Settings) {
                 values.add(valuesRs.getString("enumlabel"))
             }
         }
-        return EnumType(postgresName, values)
+        return EnumType(postgresName, values, sources = mutableListOf())
     }
 }
 
 data class PostgresName(val unqualified : String, val qualified : String){
     override fun toString() = qualified
 }
-internal data class EnumType(val postgresName : PostgresName, val values: List<String>){
-    val className get() = postgresName.toClassName()
+internal data class EnumType(val postgresName : PostgresName, val values: List<String>, val sources : MutableList<GenerateElement>){
+    val className get() = postgresName.toClassName("enums")
 }
 internal data class CompositeType(
     val postgresName : PostgresName,
-    val columns : List<CompositeTypeEntry>
+    val columns : List<CompositeTypeEntry>,
+    val sources : MutableList<GenerateElement>,
 ){
-    val className get() = postgresName.toClassName()
+    val className get() = postgresName.toClassName("composites")
 }
 
 internal data class CompositeTypeEntry(
@@ -309,12 +319,15 @@ internal data class CompositeTypeEntry(
     val repr : TypeRepr
 )
 
-internal data class DomainType(val postgresName: PostgresName, val wraps : TypeRepr){
-    val className get() = postgresName.toClassName()
+internal data class DomainType(val postgresName: PostgresName, val wraps : TypeRepr, val sources : MutableList<GenerateElement>){
+    val className get() = postgresName.toClassName("domains")
 }
 
 
-private fun PostgresName.toClassName() = ClassName.bestGuess("net.justmachinery.kdbgen.sql." + underscoreToCamelCaseTypeName(unqualified))
+private fun PostgresName.toClassName(subpackage : String?) = composeClassName(
+    subpackage = subpackage,
+    name = underscoreToCamelCaseTypeName(unqualified)
+)
 //Format is TypeName
 private fun underscoreToCamelCaseTypeName(name: String): String {
 	return name.split("_").joinToString("", transform = { it.capitalize() })

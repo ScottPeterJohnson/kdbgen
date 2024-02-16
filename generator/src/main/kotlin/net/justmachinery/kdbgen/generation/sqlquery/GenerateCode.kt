@@ -1,118 +1,143 @@
 package net.justmachinery.kdbgen.generation.sqlquery
 
 import com.squareup.kotlinpoet.*
-import java.io.File
-import javax.lang.model.element.Element
-import javax.tools.Diagnostic
+import net.justmachinery.kdbgen.generation.GenerateElement
 
 internal class GenerateCode(val generator : KdbGenerator) {
-    private val globallyOutputtedClasses = mutableSetOf<ClassName>()
-    fun ensureGlobal(name : ClassName, construct : (TypeSpec.Builder)->Unit){
-        if(globallyOutputtedClasses.add(name)){
-            val builder = TypeSpec.classBuilder(name)
-            construct(builder)
-            fileBuilderFor("SharedResultClasses").addTypeIfNotExists(builder.build())
+    fun ensureResultClass(name : ClassName, sources: List<GenerateElement>, construct : (TypeSpec.Builder)->Unit){
+        val existing = fileBuilders.get(name.canonicalName)
+        if(existing != null){
+            existing.sources.addAll(sources)
+        } else {
+            generateFile(name, aggregating = false, sources = sources){
+                val builder = TypeSpec.classBuilder(name)
+                construct(builder)
+                it.addType(builder.build())
+            }
         }
     }
 
-    private val fileBuilders = mutableMapOf<String, FileSpec.Builder>()
-    private fun fileBuilderFor(name : String) = fileBuilders.getOrPut(name) {
-        FileSpec.builder(generatedPackageName, name).also {
-            it.addAnnotation(AnnotationSpec.builder(Suppress::class)
-                .also {
-                    listOf(
-                        "UNCHECKED_CAST",
-                        "RemoveRedundantBackticks",
-                        "RemoveRedundantQualifierName",
-                        "UNUSED_PARAMETER",
-                        "USELESS_CAST",
-                    ).forEach { an ->
-                        it.addMember(CodeBlock.of("\"$an\""))
+    private val fileBuilders = mutableMapOf<String, GenFileBuilder>()
+    private class GenFileBuilder(
+        val builder : FileSpec.Builder,
+        val sources : MutableList<GenerateElement>,
+        val aggregating : Boolean
+    )
+
+
+    private fun generateFile(
+        className: ClassName,
+        aggregating: Boolean,
+        sources : List<GenerateElement>,
+        create : (FileSpec.Builder)->Unit,
+    ) = fileBuilders.getOrPut(className.canonicalName) {
+        GenFileBuilder(
+            builder = FileSpec.builder(className).also {
+                it.addAnnotation(AnnotationSpec.builder(Suppress::class)
+                    .also {
+                        listOf(
+                            "UNCHECKED_CAST",
+                            "RemoveRedundantBackticks",
+                            "RemoveRedundantQualifierName",
+                            "UNUSED_PARAMETER",
+                            "USELESS_CAST",
+                        ).forEach { an ->
+                            it.addMember(CodeBlock.of("\"$an\""))
+                        }
                     }
-                }
-                .useSiteTarget(AnnotationSpec.UseSiteTarget.FILE)
-                .build())
-        }
+                    .useSiteTarget(AnnotationSpec.UseSiteTarget.FILE)
+                    .build())
+            },
+            sources = sources.toMutableList(),
+            aggregating = aggregating
+        )
+    }.also {
+        create(it.builder)
     }
 
     fun generateCode(){
         try {
             generator.typeContext.enums.let {
                 if (it.isNotEmpty()) {
-                    renderEnumTypes(fileBuilderFor("EnumTypes"), it.values.toList())
+                    it.values.forEach {
+                        generateFile(it.className, aggregating = false, sources = it.sources){ builder ->
+                            renderEnumType(builder, it)
+                        }
+                    }
                 }
             }
             generator.typeContext.domains.let {
                 if (it.isNotEmpty()) {
-                    renderDomainTypes(fileBuilderFor("DomainTypes"), it.values.toList())
+                    it.values.forEach {
+                        generateFile(it.className, aggregating = false, sources = it.sources){ builder ->
+                            renderDomainType(builder, it)
+                        }
+                    }
                 }
             }
 
             generator.typeContext.composites.let {
                 if (it.isNotEmpty()) {
-                    renderCompositeTypes(fileBuilderFor("CompositeTypes"), it.values.toList())
+                    it.values.forEach {
+                        generateFile(it.className, aggregating = false, sources = it.sources){ builder ->
+                            renderCompositeType(builder, it)
+                        }
+                    }
                 }
             }
 
             for (query in generator.globalQueries) {
-                GenerateQuery(
-                    generateCode = this,
-                    fileBuilder = fileBuilderFor("GlobalQueries"),
-                    container = null,
-                    containerName = null,
-                    query = query
-                ).run()
-            }
-
-            for (container in generator.containerQueries) {
-                val queryContainerInterface = TypeSpec.interfaceBuilder(container.containerInterfaceName)
-                val builder = fileBuilderFor(container.containerInterfaceName)
-                for (query in container.contents) {
+                val queryName = composeClassName(subpackage = "globalqueries", name = query.name)
+                generateFile(queryName, aggregating = false, sources = listOf(query.element)){
                     GenerateQuery(
                         generateCode = this,
-                        fileBuilder = builder,
-                        container = queryContainerInterface,
-                        containerName = container.containerInterfaceName,
+                        fileBuilder = it,
+                        container = null,
+                        containerName = null,
                         query = query
                     ).run()
                 }
-                builder.addType(queryContainerInterface.build())
             }
 
-            val outputDirectory = File(generator.context.settings.outputDirectory)
-            outputDirectory.resolve(generatedPackageName.replace('.', '/')).deleteRecursively()
-            fileBuilders.values.forEach { builder ->
-                builder.build().writeTo(outputDirectory)
+            for (container in generator.containerQueries) {
+                val parentPackage = container.parent.enclosingPackage()
+                val containerName = if(parentPackage != null) {
+                    ClassName.bestGuess("$parentPackage.${container.containerInterfaceName}")
+                } else { 
+                    composeClassName(subpackage = "querycontainers", name = container.containerInterfaceName) 
+                }
+                generateFile(containerName, aggregating = false, sources = listOf(container.parent)){
+                    val queryContainerInterface = TypeSpec.interfaceBuilder(container.containerInterfaceName)
+                    for (query in container.contents) {
+                        GenerateQuery(
+                            generateCode = this,
+                            fileBuilder = it,
+                            container = queryContainerInterface,
+                            containerName = containerName,
+                            query = query
+                        ).run()
+                    }
+                    it.addType(queryContainerInterface.build())
+                }
             }
-            //TODO: Unclear whether there's a way to use the Filer API and also generate Kotlin source files.
-            //This precludes incremental annotation processing.
-            /*generator.context.processingEnv.filer.createResource(
-            StandardLocation.SOURCE_OUTPUT,
-            generatedPackageName,
-            "Queries.kt",
-            *(generator.context.elements.all.toTypedArray())
-        ).openWriter().use {
-            fileBuilder.build().writeTo(it)
-        }*/
+
+            fileBuilders.entries.forEach { (name, builder) ->
+                //In the common case where kdbgen is run on the main and test source sets, we don't want to double-generate
+                //on things like enums &etc. So if the class already exists, don't generate it.
+                if(!generator.context.gen.classExists(name)){
+                    generator.context.gen.createCode(
+                        sources = builder.sources,
+                        aggregating = builder.aggregating,
+                        spec = builder.builder.build()
+                    )
+                }
+            }
         } catch(g : GeneratingException){
-            generator.context.processingEnv.messager.printMessage(Diagnostic.Kind.ERROR, g.msg, g.element)
+            generator.context.gen.logError(g.msg, g.element)
         }
     }
-
-
 }
 
-class GeneratingException(val msg : String, val element : Element) : RuntimeException()
+class GeneratingException(val msg : String, val element : GenerateElement) : RuntimeException()
 
-fun FileSpec.Builder.addTypeIfNotExists(type: TypeSpec){
-    if(type.name != null){
-        val alreadyExists = try {
-            Class.forName(packageName + "." + type.name)
-            true
-        } catch(t : ClassNotFoundException){
-            false
-        }
-        if(alreadyExists){ return }
-    }
-    this.addType(type)
-}
+internal fun composeClassName(basePackage: String? = generatedPackageName, subpackage: String? = null, name: String) = ClassName.bestGuess(listOfNotNull(basePackage, subpackage, name).joinToString("."))
