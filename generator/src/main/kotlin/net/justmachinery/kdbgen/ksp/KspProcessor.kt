@@ -84,7 +84,7 @@ internal class KspGenerateContext(val environment: SymbolProcessorEnvironment, v
     }
 }
 
-class KspGenerateElement(val node : KSNode) : GenerateElement {
+data class KspGenerateElement(val node : KSNode) : GenerateElement {
     override fun enclosingPackage() : String? {
         return node.containingFile?.packageName?.asString()?.nullIfEmpty()
     }

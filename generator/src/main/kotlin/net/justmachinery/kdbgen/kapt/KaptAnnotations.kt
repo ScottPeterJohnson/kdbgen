@@ -114,7 +114,7 @@ internal class KaptGenerateContext(val roundEnv: RoundEnvironment, val processin
     }
 }
 
-class KaptGenerateElement(val element : Element) : GenerateElement {
+data class KaptGenerateElement(val element : Element) : GenerateElement {
     override fun enclosingPackage(): String? {
         return parentPackage(element)
     }

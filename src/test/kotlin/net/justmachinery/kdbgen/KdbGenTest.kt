@@ -56,6 +56,7 @@ class AnnotationQueriesTest : DatabaseTest(), AnnotationQueriesTestQueries {
 		"select coalesce(max(address_id), 0) from addresses",
 		columnCanBeNull = [false]
 	)
+	fun otherQueries(){}
 	@SqlQuery("rangeInsert",
 		"insert into range_test (interval) values (:range)"
 	)
@@ -86,6 +87,7 @@ class AnnotationQueriesTest : DatabaseTest(), AnnotationQueriesTestQueries {
 	@SqlQuery("enumTestInsert", /* language=PostgreSQL */ """INSERT INTO enum_test (enum_test) VALUES (:enumTestValue)""")
 	@SqlQuery("enumTestSelect", "SELECT * FROM enum_test")
 	fun queries(){}
+
 	init {
 		"basic tests" - {
 			"should be able to do basic operations" {

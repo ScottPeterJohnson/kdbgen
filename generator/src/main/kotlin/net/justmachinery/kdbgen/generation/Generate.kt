@@ -49,7 +49,7 @@ internal class Generate {
                 val prelude = PreludeGenerator(context).generate()
                 KdbGenerator(context, prelude).use { generator ->
                     val elementsByContainer = annotatedElements.queries.groupBy {
-                        it.queryContainerParent()
+                        it.queryContainerElement()
                     }
                     for((container, elements) in elementsByContainer.entries){
                         if(container == null){
@@ -83,12 +83,9 @@ internal class Generate {
         return true
     }
 
-    private fun GenerateElement.queryContainerParent() : GenerateElement? {
-        if(this.enclosingClass() != null){
-            return if(this.enclosingClass()!!.getAnnotations(QueryContainer::class.java).isNotEmpty()) this.enclosingClass()
-            else this.enclosingClass()!!.queryContainerParent()
-        }
-        return null
+    private fun GenerateElement.queryContainerElement() : GenerateElement? {
+        return if(this.getAnnotations(QueryContainer::class.java).isNotEmpty()) this
+        else this.enclosingClass()!!.queryContainerElement()
     }
 }
 
